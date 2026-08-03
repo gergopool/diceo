@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+# A second push should cancel the first run rather than queue behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# This workflow runs repository-supplied code -- pytest, and a justfile recipe -- so
+# it asks for the least the checkout needs and nothing else. Every `uses:` below is
+# pinned to a commit SHA for the reason spelled out in release.yml.
+permissions:
+  contents: read
+
+# One job. Tests run per interpreter because that is the only thing an
+# interpreter can change; lint and the licence gate run once, because they
+# cannot differ between 3.11 and 3.14 and running them four times only buys
+# a slower red.
+#
+# Two Python versions, the floor and the ceiling of what pyproject claims. The
+# ones in between are interpolation, and this is a package with two dependencies
+# and no C extension of its own.
+#
+# Three operating systems, because the wheels claim three and the suite is full of
+# POSIX-only calls -- mkfifo, AF_UNIX, /dev/null. An ubuntu-only matrix let a test
+# that cannot pass on macOS sit green for weeks: the socket path pytest hands out
+# there is longer than the 104-byte `sun_path` limit, so `bind` failed on every
+# developer machine and on no CI cell. The extra cells run only the floor and the
+# ceiling interpreter on Linux's schedule; macOS and Windows run one each.
+#
+# The licence gate is invoked as the recipe, never as a copy of it: a
+# reimplemented gate drifts from the one contributors run, and a drifted licence
+# gate is worse than no gate because it still reports green.
+
+jobs:
+  check:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.11", "3.14"]
+        include:
+          - os: macos-latest
+            python: "3.14"
+          - os: windows-latest
+            python: "3.14"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+      - run: uv python install ${{ matrix.python }}
+      - run: uv run --python ${{ matrix.python }} --group dev pytest -q
+      # Lint, the licence gate and the packaging gate do not vary by interpreter or
+      # by platform, so they run on one cell.
+      - if: matrix.os == 'ubuntu-latest' && matrix.python == '3.14'
+        run: uvx --from rust-just just lint
+      - if: matrix.os == 'ubuntu-latest' && matrix.python == '3.14'
+        run: uvx --from rust-just just license-check
+      # `smoke` builds the wheel, proves it holds the package and nothing else, and
+      # installs it into a fresh venv. Without it the first time anyone runs the
+      # packaging gate is the release.
+      - if: matrix.os == 'ubuntu-latest' && matrix.python == '3.14'
+        run: uvx --from rust-just just smoke

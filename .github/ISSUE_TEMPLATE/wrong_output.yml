@@ -1,0 +1,48 @@
+name: Wrong or missing content
+description: Text that should be in the chunks is not, or is mangled
+labels: [extraction]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most important kind of report this project can get. Rule 3 is that nothing is
+        lost silently, so content missing **without** a diagnostic saying so is a failure of the
+        core promise.
+
+  - type: textarea
+    id: missing
+    attributes:
+      label: What is missing or wrong
+      description: Quote the text as it appears in the document, and what came out instead.
+    validations: { required: true }
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        `diceo yourfile --diagnostics`. If `lost_data` is false while content is missing, say
+        so prominently — that combination is the bug, over and above the missing text.
+      render: json
+    validations: { required: true }
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does the content live in the document?
+      options:
+        - a table
+        - a header or footer
+        - a text box or shape
+        - a footnote, endnote or comment
+        - a scanned page or image
+        - a chart or SmartArt
+        - ordinary body text
+        - somewhere else
+    validations: { required: true }
+
+  - type: textarea
+    id: file
+    attributes:
+      label: The document, or a redacted document that reproduces it
+    validations: { required: true }

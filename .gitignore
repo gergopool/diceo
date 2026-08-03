@@ -1,0 +1,22 @@
+# Data and fixtures never enter git (client documents).
+data/
+.local/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Editors and desktop clutter, so a contributor's own tooling never lands in a PR.
+.DS_Store
+.idea/
+.vscode/

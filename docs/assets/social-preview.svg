@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" role="img" aria-label="diceo — documents go in, chunks come out, nothing goes missing.">
+<!--
+  GitHub's social preview (Settings, then Social preview). It has to be a raster
+  upload at 1280x640, so this file is the source; render it to PNG with cairosvg
+  at scale 1 and upload the result.
+
+  Fixed light palette on purpose. The preview is composited onto whatever
+  background Slack, X or Hacker News uses, so it cannot follow a colour scheme.
+-->
+<rect width="1280" height="640" fill="#ffffff"/>
+<rect x="0" y="0" width="1280" height="10" fill="#0b7285"/>
+
+<text x="90" y="188" fill="#0b7285" font-size="82" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">diceo</text>
+
+<text x="90" y="268" fill="#1a1a1a" font-size="38" font-weight="600">Documents go in. Chunks come out.</text>
+<text x="90" y="316" fill="#1a1a1a" font-size="38" font-weight="600">Nothing goes missing.</text>
+
+<line x1="90" y1="368" x2="1190" y2="368" stroke="#e5e7eb" stroke-width="2"/>
+
+<text x="90" y="422" fill="#6b7280" font-size="25">Eleven office formats to retrieval-ready chunks, on one CPU core,</text>
+<text x="90" y="460" fill="#6b7280" font-size="25">in memory that does not grow with the document.</text>
+
+<circle cx="102" cy="533" r="7" fill="#2f9e44"/>
+<text x="122" y="541" fill="#1a1a1a" font-size="24">Apache-2.0</text>
+<circle cx="292" cy="533" r="7" fill="#2f9e44"/>
+<text x="312" y="541" fill="#1a1a1a" font-size="24">two dependencies</text>
+<circle cx="562" cy="533" r="7" fill="#2f9e44"/>
+<text x="582" y="541" fill="#1a1a1a" font-size="24">no GPU, no system binaries</text>
+
+<text x="90" y="598" fill="#9ca3af" font-size="22">github.com/gergopool/diceo</text>
+</svg>

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 500" width="820" height="500" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" role="img" aria-label="Chunk quality for retrieval against throughput, for ten document extraction tools on synthetic held-out PDFs. diceo is furthest up and to the right of any tool measured.">
+<style>@media (prefers-color-scheme: dark){.bg{fill:#0d1117}.t{fill:#e8e8e8}.d{fill:#9ca3af}.axis{stroke:#e8e8e8}.ours{fill:#3bc9db}.oursline{stroke:#3bc9db}.free{fill:#69db7c}.agpl{fill:#ff8787}.restricted{fill:#ffa94d}}</style>
+<rect class="bg" width="820" height="500" fill="#ffffff"/>
+<rect class="ours" x="665.3" y="78" width="124.7" height="69.6" fill="#0b7285" opacity="0.08"/>
+<path class="oursline" d="M 665.3 78.0 L 666.2 86.5 L 666.2 95.0 L 666.2 104.0 L 664.6 112.3 L 666.3 121.8 L 664.5 130.5 L 664.2 138.3 L 665.3 147.6" stroke="#0b7285" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.55"/>
+<path class="oursline" d="M 665.3 147.6 L 680.3 147.9 L 697.0 147.9 L 712.2 147.0 L 728.5 147.9 L 743.9 146.6 L 758.4 147.9 L 773.9 147.2 L 790.0 147.6" stroke="#0b7285" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.55"/>
+<text x="790" y="28" class="d" fill="#6b7280" font-size="14.5" text-anchor="end">None of the 10 tools measured</text>
+<text x="790" y="48" class="d" fill="#6b7280" font-size="14.5" text-anchor="end">is faster AND better</text>
+<path class="axis" d="M 84.0 426.0 L 142.8 426.1 L 202.6 425.2 L 261.4 425.1 L 320.5 425.8 L 378.6 426.8 L 436.5 425.1 L 496.5 425.4 L 555.1 426.8 L 613.8 426.0 L 673.2 426.1 L 731.6 426.6 L 790.0 426.0" stroke="#1a1a1a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+<path class="axis" d="M 84.0 78.0 L 83.0 106.9 L 84.8 137.3 L 83.6 165.5 L 82.7 194.9 L 83.3 223.5 L 83.6 253.1 L 84.8 281.6 L 83.2 309.9 L 83.0 338.8 L 84.1 369.1 L 83.4 396.6 L 84.0 426.0" stroke="#1a1a1a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+<path class="axis" d="M 128.1 426.0 L 128.5 428.6 L 127.8 430.8 L 128.1 433.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="128.1" y="452" class="d" fill="#6b7280" font-size="14" text-anchor="middle">0.01</text>
+<path class="axis" d="M 275.2 426.0 L 275.8 428.1 L 275.2 431.0 L 275.2 433.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="275.2" y="452" class="d" fill="#6b7280" font-size="14" text-anchor="middle">0.1</text>
+<path class="axis" d="M 422.3 426.0 L 422.2 428.6 L 422.0 430.9 L 422.3 433.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="422.3" y="452" class="d" fill="#6b7280" font-size="14" text-anchor="middle">1</text>
+<path class="axis" d="M 569.4 426.0 L 568.8 428.6 L 569.6 430.2 L 569.4 433.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="569.4" y="452" class="d" fill="#6b7280" font-size="14" text-anchor="middle">10</text>
+<path class="axis" d="M 716.5 426.0 L 716.7 428.5 L 716.1 430.2 L 716.5 433.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="716.5" y="452" class="d" fill="#6b7280" font-size="14" text-anchor="middle">100</text>
+<path class="axis" d="M 77.0 426.0 L 79.4 425.9 L 82.2 425.8 L 84.0 426.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="71" y="431.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.73</text>
+<path class="axis" d="M 77.0 368.0 L 79.6 368.4 L 81.9 368.6 L 84.0 368.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="71" y="373.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.75</text>
+<path class="axis" d="M 77.0 310.0 L 78.9 310.3 L 81.9 309.7 L 84.0 310.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="71" y="315.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.78</text>
+<path class="axis" d="M 77.0 252.0 L 79.0 251.8 L 82.1 251.9 L 84.0 252.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="71" y="257.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.80</text>
+<path class="axis" d="M 77.0 194.0 L 79.2 193.8 L 82.2 194.5 L 84.0 194.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="71" y="199.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.83</text>
+<path class="axis" d="M 77.0 136.0 L 79.0 135.8 L 81.7 135.7 L 84.0 136.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="71" y="141.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.85</text>
+<path class="axis" d="M 77.0 78.0 L 79.0 78.3 L 81.5 77.5 L 84.0 78.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="71" y="83.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.88</text>
+<path class="ours" d="M 672.4 147.6 L 671.8 150.3 L 671.2 153.5 L 667.9 153.9 L 665.3 154.2 L 662.6 154.0 L 660.2 152.7 L 658.2 150.5 L 658.7 147.6 L 658.4 144.8 L 660.0 142.4 L 662.5 140.8 L 665.3 140.8 L 668.1 140.8 L 671.2 141.7 L 673.0 144.4 L 673.1 147.6 Z" fill="#0b7285" fill-opacity="0.85" stroke="#0b7285" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="677.3" y="169.6" class="t" fill="#1a1a1a" font-size="16.5" font-weight="700" text-anchor="start">Diceo</text>
+<text x="677.3" y="186.6" class="d" fill="#6b7280" font-size="12.5" text-anchor="start">Apache-2.0</text>
+<path class="agpl" d="M 697.3 251.2 L 705.8 266.8 L 686.8 267.8 Z" fill="#c92a2a" fill-opacity="0.85" stroke="#c92a2a" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="710.3" y="283.3" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">PyMuPDF</text>
+<text x="710.3" y="300.3" class="d" fill="#6b7280" font-size="12.5" text-anchor="start">AGPL</text>
+<path class="free" d="M 433.3 240.4 L 432.8 243.4 L 430.3 245.3 L 428.5 247.9 L 425.4 247.4 L 422.8 246.7 L 420.2 245.6 L 418.2 243.4 L 418.4 240.4 L 418.9 237.7 L 420.2 235.2 L 422.5 233.5 L 425.4 232.6 L 428.3 233.3 L 430.8 235.0 L 433.2 237.2 L 432.3 240.4 Z" fill="#2f9e44" fill-opacity="0.85" stroke="#2f9e44" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="439.4" y="262.4" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">MarkItDown</text>
+<text x="439.4" y="279.4" class="d" fill="#6b7280" font-size="12.5" text-anchor="start">MIT</text>
+<path class="agpl" d="M 226.6 117.0 L 234.3 132.6 L 216.5 132.5 Z" fill="#c92a2a" fill-opacity="0.85" stroke="#c92a2a" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="239.6" y="130.7" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">PyMuPDF4LLM</text>
+<text x="239.6" y="147.7" class="d" fill="#6b7280" font-size="12.5" text-anchor="start">AGPL</text>
+<path class="free" d="M 254.1 189.4 L 254.2 192.5 L 252.0 194.6 L 249.5 196.1 L 246.7 196.6 L 243.6 196.9 L 241.0 195.0 L 240.4 192.0 L 238.3 189.4 L 239.4 186.3 L 241.6 184.2 L 243.8 182.4 L 246.7 182.2 L 249.9 181.7 L 252.2 183.9 L 253.0 186.7 L 254.9 189.4 Z" fill="#2f9e44" fill-opacity="0.85" stroke="#2f9e44" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="260.7" y="215.4" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">Docling</text>
+<text x="260.7" y="232.4" class="d" fill="#6b7280" font-size="12.5" text-anchor="start">MIT</text>
+<path class="free" d="M 645.7 233.4 L 645.8 236.5 L 644.1 239.1 L 641.2 240.0 L 638.5 240.3 L 635.7 240.0 L 633.4 238.5 L 631.2 236.4 L 630.9 233.4 L 631.9 230.7 L 632.9 227.9 L 635.4 226.0 L 638.5 225.2 L 641.6 225.7 L 644.1 227.8 L 644.9 230.8 L 646.8 233.4 Z" fill="#2f9e44" fill-opacity="0.85" stroke="#2f9e44" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="626.5" y="223.4" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="end">LiteParse</text>
+<text x="626.5" y="240.4" class="d" fill="#6b7280" font-size="12.5" text-anchor="end">Apache-2.0</text>
+<path class="free" d="M 612.9 361.0 L 611.4 363.6 L 610.0 365.8 L 608.0 367.8 L 605.2 369.3 L 602.6 367.5 L 600.3 366.0 L 598.4 363.9 L 596.9 361.0 L 598.6 358.3 L 600.0 355.8 L 602.5 354.4 L 605.2 353.1 L 608.1 354.1 L 609.9 356.3 L 611.5 358.4 L 612.5 361.0 Z" fill="#2f9e44" fill-opacity="0.85" stroke="#2f9e44" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="593.2" y="381.0" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="end">Extractous</text>
+<text x="593.2" y="398.0" class="d" fill="#6b7280" font-size="12.5" text-anchor="end">Apache-2.0</text>
+<path class="free" d="M 592.3 284.5 L 590.8 287.0 L 589.8 289.6 L 587.4 291.0 L 584.7 291.4 L 582.1 290.7 L 579.7 289.4 L 578.4 287.1 L 577.6 284.5 L 577.7 281.6 L 579.1 278.8 L 581.7 277.2 L 584.7 276.4 L 587.4 277.9 L 590.0 279.2 L 591.5 281.7 L 591.3 284.5 Z" fill="#2f9e44" fill-opacity="0.85" stroke="#2f9e44" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="572.7" y="306.5" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="end">Xberg</text>
+<text x="572.7" y="323.5" class="d" fill="#6b7280" font-size="12.5" text-anchor="end">MIT</text>
+<path class="free" d="M 396.8 214.9 L 396.3 217.7 L 394.2 219.7 L 392.5 222.5 L 389.4 222.2 L 386.6 221.6 L 384.6 219.6 L 382.8 217.6 L 382.3 214.9 L 382.0 211.8 L 384.2 209.7 L 386.5 208.0 L 389.4 208.2 L 392.0 208.7 L 394.7 209.6 L 396.8 211.8 L 397.5 214.9 Z" fill="#2f9e44" fill-opacity="0.85" stroke="#2f9e44" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="403.4" y="200.9" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">Unstructured</text>
+<text x="403.4" y="217.9" class="d" fill="#6b7280" font-size="12.5" text-anchor="start">Apache-2.0</text>
+<path class="restricted" d="M 172.0 178.6 L 183.9 178.4 L 185.1 190.8 L 170.3 191.3 Z" fill="#e8590c" fill-opacity="0.85" stroke="#e8590c" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="191.9" y="160.7" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">MinerU</text>
+<text x="191.9" y="177.7" class="d" fill="#6b7280" font-size="12.5" text-anchor="start">Apache-2.0 + terms</text>
+<text x="437" y="470" class="t" fill="#1a1a1a" font-size="16" font-weight="600" text-anchor="middle">Throughput (documents per CPU-second)</text>
+<text x="24" y="252" class="t" fill="#1a1a1a" font-size="16" font-weight="600" text-anchor="middle" transform="rotate(-90 24 252)">Chunk quality for retrieval</text>
+<text x="84" y="492" class="d" fill="#6b7280" font-size="11.5">44 synthetic held-out PDFs · gold@5 at 600 characters · each tool with its own chunker where it ships one</text>
+</svg>

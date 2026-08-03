@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Benchmark question
+    url: https://github.com/gergopool/diceo/blob/main/docs/benchmarks.md
+    about: >
+      Every number in docs/ names the script and fixture that produced it. If one looks wrong,
+      the protocol says how it was measured -- and a reproduction that disagrees is very welcome
+      as a bug report.

@@ -1,0 +1,30 @@
+# GitHub reads this file and puts a "Sponsor" button at the top of the repository.
+#
+# WHATEVER IS ENABLED HERE, THE TIERS GIVE NOTHING IN RETURN. No logo in the README, no
+# name in a backers file, no priority support, no perks of any kind. A perk is a supply
+# for VAT purposes and an unconditional donation is not, which makes this a hard
+# constraint with a tax reason behind it rather than a stylistic one. The reasoning is
+# D21 in the research repository's docs/decisions.md.
+#
+# On Buy Me a Coffee specifically that means: **Memberships off, Extras/Shop off.** Both
+# sell something, which is exactly the line D21 exists to keep us behind. A one-off
+# "coffee" with no reward attached is the only thing this page should offer. Its public
+# supporter feed is fine -- a supporter choosing to be visible is not us promising them
+# recognition.
+#
+# Buy Me a Coffee is the choice, and it is NOT the cheapest -- it takes ~5% on top of
+# payment processing, where GitHub Sponsors takes nothing from individuals. That is
+# deliberate: it is the page people recognise, and 5% of a small number is a small
+# number. Do not "fix" this back to GitHub Sponsors on fee grounds alone; it was decided
+# with the fees known.
+#
+# The handle below must match the one in the page's own URL (buymeacoffee.com/<handle>).
+# A funding link that 404s is worse than no button at all. Nothing renders until the
+# repository is public.
+
+buy_me_a_coffee: gergopool
+
+# Considered and not enabled -- one is enough:
+# github: gergopool          # 0% fee, best for a finance department paying an invoice
+# ko_fi: gergopool           # 0% platform fee, processor cut only
+# open_collective: diceo   # transparent ledger; worth it only if companies fund this

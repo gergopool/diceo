@@ -1,0 +1,127 @@
+[project]
+name = "diceo"
+# Single-sourced from diceo.__version__ so the wheel and `diceo --version`
+# can never disagree -- a mismatch there is the first thing a user notices and
+# the last thing anyone remembers to update by hand.
+dynamic = ["version"]
+# The one line PyPI prints under the name and returns in search results. It says what
+# goes in and what comes out, because that is what someone scanning results needs;
+# the licence is a badge and a metadata field already, and led here it read as a
+# lawyer's summary of a chunking library.
+description = "Turns office documents (PDF, DOCX, XLSX, PPTX, HTML, email) into retrieval-ready chunks for RAG"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Gergely Papp" }]
+keywords = ["pdf", "docx", "xlsx", "pptx", "chunking", "rag", "retrieval", "extraction"]
+# No "License :: OSI Approved ::" classifier: PEP 639 deprecates it once `license`
+# carries an SPDX expression, and the pair is what modern build backends warn or error
+# on. The expression above is the single source.
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Text Processing",
+  "Topic :: Text Processing :: Indexing",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
+]
+
+# The default install must stay small and pure-wheel. Every backend added here
+# is a licence decision -- decision D2 in the research repository.
+dependencies = [
+  # Apache-2.0 OR BSD-3-Clause. Floor is 5.0 rather than 4.30 because pypdfium2
+  # 4.30.1 shipped a PDFium build (bisected to somewhere in 6721..6844) that
+  # silently truncated table rows mid-number and dropped the rows after it --
+  # pypdfium2 #336, upstream crbug 387277993. A floor that admits a build with a
+  # known silent-truncation bug is not a floor. Measured in experiment 029, in the
+  # research repository.
+  "pypdfium2>=5.0",
+  "python-calamine>=0.5",  # MIT (Rust calamine)
+]
+
+[project.urls]
+Homepage = "https://github.com/gergopool/diceo"
+Repository = "https://github.com/gergopool/diceo"
+Documentation = "https://github.com/gergopool/diceo/blob/main/docs/benchmarks.md"
+Issues = "https://github.com/gergopool/diceo/issues"
+Changelog = "https://github.com/gergopool/diceo/blob/main/CHANGELOG.md"
+Funding = "https://buymeacoffee.com/gergopool"
+
+[project.scripts]
+# `diceo report.pdf` before writing any code -- see src/diceo/__main__.py.
+diceo = "diceo.__main__:main"
+
+# A dependency group (PEP 735), not an extra. The distinction is who can see it:
+# an extra is published metadata, so `pip install diceo[dev]` was a supported
+# thing to type and it installed eight packages -- pytest, ruff, and five libraries
+# that only ever *produce* documents diceo then reads. None of that is any use to
+# a user of the library, and an extra is a public promise. A group lives in the
+# source tree and cannot be requested from PyPI at all, which is the accurate
+# statement about what this list is for. `uv run --group dev`; uv installs it by
+# default in this project.
+#
+# One group, not two: fixture generation used to be a separate `corpus` extra with
+# the same problem, and folding it in is why there is now exactly one list.
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "ruff>=0.8",
+  "pip-licenses>=5.0",
+  # Fixture generation (`just fixtures`, `just xlsx-fixtures`, `just ooxml-fixtures`).
+  "reportlab>=4.2",   # BSD-3-Clause -- born-digital PDFs with real tables
+  "python-docx>=1.1", # MIT
+  "python-pptx>=1.0", # MIT
+  "xlsxwriter>=3.2",  # BSD-2-Clause -- write-only, fast
+  "pillow>=10.4",     # MIT-CMU -- generated figures
+]
+
+[build-system]
+# Floor, not a pin: 1.27 is the version the wheel and sdist here were built and
+# checked with, and it is the one that reads `license`/`license-files` as PEP 639
+# rather than as the older, now-deprecated table form.
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/diceo/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/diceo"]
+
+[tool.hatch.build.targets.sdist]
+# An allow-list, not a deny-list, because what must stay out is not enumerable:
+# `bench/` in the research repository imports AGPL baselines, and `data/` is
+# client documents and fetched corpora nobody should get from a pip install.
+# Naming what goes in keeps both out by construction; `just build` checks it.
+include = [
+  "src/diceo",
+  "tests",
+  "README.md",
+  "LICENSE",
+  "CREDITS.md",
+  "CHANGELOG.md",
+  "pyproject.toml",
+]
+
+[tool.ruff]
+line-length = 96
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `-rs`: print every skip with its reason, even under `-q`. Rule 3 is that nothing
+# is lost silently, and a test that quietly skips on every CI cell is exactly that
+# failure applied to the suite -- the ones needing the private corpus under `data/`
+# are meant to skip on a clone, and that has to be legible in the log.
+addopts = "-rs"

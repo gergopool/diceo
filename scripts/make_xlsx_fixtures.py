@@ -1,0 +1,365 @@
+"""Build the XLSX fixtures the spreadsheet probes need.
+
+Four shapes, because XLSX is really two formats wearing one hat:
+
+  sheet-100k.xlsx / sheet-1m.xlsx
+      100k and 1M rows x 8 columns, written with ``constant_memory=True``.
+      XlsxWriter in that mode emits **inline strings** -- there is no
+      ``sharedStrings.xml`` at all -- so these fixtures measure the worst case for
+      a scanner: every string is decoded and unescaped where it sits.
+  sheet-100k-shared.xlsx / sheet-1m-shared.xlsx
+      the same content written with the string table on, i.e. what Excel, pandas
+      and every SQL-to-Excel exporter actually produce. Repeated strings are
+      interned once in ``xl/sharedStrings.xml`` and cells reference them by index.
+  sheet-types.xlsx
+      small, but one cell of every kind calamine distinguishes: numbers, dates,
+      datetimes, times, elapsed durations, booleans, formula results, errors,
+      unicode, whitespace, gaps. This is the correctness fixture, not a speed one.
+  sheet-edge.xlsx
+      hand-written package bytes for the shapes XlsxWriter cannot emit: inline
+      rich text, reversed attribute order, self-closing cells, numeric character
+      references, empty ``<si/>``, and a workbook whose sheet order disagrees
+      with its part filenames.
+
+The row content is a seeded synthetic telemetry export: six low-cardinality text
+columns, one float, one date. That ratio is the point -- a sheet of nothing but
+distinct floats would flatter a byte scanner, and a sheet of one repeated word
+would flatter the string table::
+
+    uv run --group dev python scripts/make_xlsx_fixtures.py
+    uv run --group dev python scripts/make_xlsx_fixtures.py --rows 1000000
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import random
+import zipfile
+from pathlib import Path
+
+FIXTURES = Path("data/fixtures")
+
+SITES = [
+    "Barrowfield Hub",
+    "Calderhythe Terminal",
+    "Dunmoor Cold Store",
+    "Elsmere Depot",
+    "Fenwick Yard",
+    "Garrowmere Plant",
+    "Harlowe Distribution",
+    "Inglefield Works",
+    "Jarrowmoor Depot",
+    "Kelsterbank Hub",
+    "Lyndhurst Terminal",
+    "Marchmont Store",
+    "Netherby Plant",
+    "Oakhampton Yard",
+    "Pennyworth Depot",
+    "Quarrendon Hub",
+    "Rothersay Works",
+    "Strathmore Terminal",
+    "Thornbury Store",
+    "Uppermill Plant",
+]
+METRICS = [
+    "water reuse ratio",
+    "solar self-consumption",
+    "inbound dwell time",
+    "cold chain excursion rate",
+    "pallet utilisation",
+    "diesel intensity",
+    "grid import share",
+    "waste diversion rate",
+    "on-time despatch",
+    "refrigerant leak rate",
+    "packaging reuse",
+    "yard throughput",
+]
+BASES = ["actual", "forecast", "restated"]
+UNITS = ["%", "h", "kWh/t", "kg CO2e/t", "pallets/h"]
+CONFIDENCE = ["A", "B", "C"]
+HEADER = [
+    "Site code",
+    "Site",
+    "Metric",
+    "Basis",
+    "Value",
+    "Unit",
+    "Confidence",
+    "Observed",
+]
+
+
+def _rows(count: int, seed: int = 7):
+    """One synthetic observation per row, deterministic for a given seed."""
+    rng = random.Random(seed)
+    codes = [f"{name[:3].upper()}-{i:02d}" for i, name in enumerate(SITES)]
+    epoch = dt.date(2023, 1, 1)
+    for _ in range(count):
+        site = rng.randrange(len(SITES))
+        yield (
+            codes[site],
+            SITES[site],
+            METRICS[rng.randrange(len(METRICS))],
+            BASES[rng.randrange(len(BASES))],
+            round(rng.uniform(0.0, 100.0), 4),
+            UNITS[rng.randrange(len(UNITS))],
+            CONFIDENCE[rng.randrange(len(CONFIDENCE))],
+            epoch + dt.timedelta(days=rng.randrange(730)),
+        )
+
+
+def write_sheet(out: Path, rows: int, *, constant_memory: bool) -> None:
+    import xlsxwriter
+
+    if out.exists():
+        print(f"  {out.name} exists, skipping")
+        return
+    book = xlsxwriter.Workbook(str(out), {"constant_memory": constant_memory})
+    date_format = book.add_format({"num_format": "yyyy-mm-dd"})
+    sheet = book.add_worksheet("Observations")
+    for column, title in enumerate(HEADER):
+        sheet.write_string(0, column, title)
+    for index, row in enumerate(_rows(rows), start=1):
+        sheet.write_string(index, 0, row[0])
+        sheet.write_string(index, 1, row[1])
+        sheet.write_string(index, 2, row[2])
+        sheet.write_string(index, 3, row[3])
+        sheet.write_number(index, 4, row[4])
+        sheet.write_string(index, 5, row[5])
+        sheet.write_string(index, 6, row[6])
+        sheet.write_datetime(index, 7, row[7], date_format)
+    # A second sheet keeps the multi-sheet path on the measured code path, and an
+    # empty third sheet keeps the "sheet with no rows" case there too.
+    notes = book.add_worksheet("Notes")
+    notes.write_string(0, 0, "Rows are one (site, metric, basis) observation each.")
+    notes.write_string(1, 0, f"{rows:,} observations, generated by make_xlsx_fixtures.py")
+    book.add_worksheet("Empty")
+    book.close()
+    inline = "inline strings" if constant_memory else "shared strings"
+    print(f"  {out.name}: {rows:,} rows, {out.stat().st_size / 1e6:.1f} MB, {inline}")
+
+
+def write_types(out: Path) -> None:
+    """Every cell kind calamine distinguishes, in one small workbook."""
+    import xlsxwriter
+
+    if out.exists():
+        print(f"  {out.name} exists, skipping")
+        return
+    book = xlsxwriter.Workbook(str(out))
+    formats = {
+        "date": book.add_format({"num_format": "yyyy-mm-dd"}),
+        "builtin_date": book.add_format({"num_format": 14}),
+        "datetime": book.add_format({"num_format": "dd/mm/yyyy hh:mm"}),
+        "time": book.add_format({"num_format": 18}),
+        "elapsed": book.add_format({"num_format": "[h]:mm:ss"}),
+        # A custom format whose letters all sit inside quotes: it must NOT be read
+        # as a date, and getting that wrong is the easy mistake.
+        "quoted": book.add_format({"num_format": '"day "0'}),
+        "money": book.add_format({"num_format": "#,##0.00"}),
+        "percent": book.add_format({"num_format": "0%"}),
+        "scientific": book.add_format({"num_format": "0.00E+00"}),
+    }
+
+    sheet = book.add_worksheet("Types")
+    sheet.write_string(0, 0, "kind")
+    sheet.write_string(0, 1, "value")
+
+    row = 1
+
+    def pair(label, writer, *args, **kwargs):
+        nonlocal row
+        sheet.write_string(row, 0, label)
+        writer(row, 1, *args, **kwargs)
+        row += 1
+
+    pair("int", sheet.write_number, 42)
+    pair("float", sheet.write_number, 42.5)
+    pair("negative", sheet.write_number, -3)
+    pair("zero", sheet.write_number, 0)
+    pair("huge", sheet.write_number, 1e20)
+    pair("tiny", sheet.write_number, 1e-7)
+    pair("long-mantissa", sheet.write_number, 3.14159265358979)
+    pair("money", sheet.write_number, 1234.5, formats["money"])
+    pair("percent", sheet.write_number, 0.42, formats["percent"])
+    pair("scientific", sheet.write_number, 12345.678, formats["scientific"])
+    pair("quoted-format", sheet.write_number, 45356, formats["quoted"])
+    pair("date", sheet.write_datetime, dt.date(2024, 3, 5), formats["date"])
+    pair("builtin-date", sheet.write_datetime, dt.date(1999, 12, 31), formats["builtin_date"])
+    pair(
+        "datetime",
+        sheet.write_datetime,
+        dt.datetime(2024, 3, 5, 6, 30, 15),
+        formats["datetime"],
+    )
+    pair("time", sheet.write_datetime, dt.time(18, 0), formats["time"])
+    pair("elapsed", sheet.write_number, 45356.25, formats["elapsed"])
+    pair("epoch-1", sheet.write_number, 1, formats["date"])
+    pair("leap-bug-59", sheet.write_number, 59, formats["date"])
+    pair("leap-bug-60", sheet.write_number, 60, formats["date"])
+    pair("leap-bug-61", sheet.write_number, 61, formats["date"])
+    pair("true", sheet.write_boolean, True)
+    pair("false", sheet.write_boolean, False)
+    pair("formula-number", sheet.write_formula, "=1+1", None, 2)
+    pair("formula-string", sheet.write_formula, '=CONCATENATE("a","b")', None, "ab")
+    pair("error", sheet.write_formula, "=1/0", None, "#DIV/0!")
+    pair("tab-inside", sheet.write_string, "before\tafter")
+    pair("newline-inside", sheet.write_string, "first\nsecond")
+    pair("padded", sheet.write_string, "  padded  ")
+    pair("markup", sheet.write_string, "<tag> & \"quoted\" 'apos'")
+    pair("unicode", sheet.write_string, "ünïcødé — ✓ 日本語")
+    pair("empty-string", sheet.write_string, "")
+
+    # A gap, then a row that starts at column D, so column padding is exercised.
+    sheet.write_string(row + 2, 3, "after a gap, starting at D")
+    sheet.write_string(row + 2, 6, "and a hole before G")
+
+    book.add_worksheet("Empty sheet")
+    tail = book.add_worksheet("Trailing & escaped")
+    tail.write_string(0, 0, "sheet names get XML-escaped too")
+    book.close()
+    print(f"  {out.name}: {out.stat().st_size / 1e3:.1f} kB, one cell per kind")
+
+
+# --------------------------------------------------------------------------- #
+# Hand-written package: byte shapes XlsxWriter never produces
+# --------------------------------------------------------------------------- #
+
+_EDGE_SHEET = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension \
+ref="A1:H12"/><sheetData>\
+<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>inline plain</t></is>\
+</c><c r="C1" t="inlineStr"><is><r><rPr><b/></rPr><t>rich </t></r><r><t>runs</t></r></is></c>\
+<c r="D1" t="str"><f>CONCATENATE(A1,"!")</f><v>formula string</v></c><c r="E1"/>\
+<c r="F1" s="0"/><c r="G1" t="s"><v>1</v></c></row>\
+<row r="2"><c r="A2" s="1"><v>45356</v></c><c r="B2" s="1"><v>45356.5</v></c>\
+<c r="C2" s="2"><v>0.75</v></c><c r="D2" s="3"><v>45356.25</v></c><c r="E2" s="4">\
+<v>45356</v></c></row>\
+<row r="3"><c r="A3" t="b"><v>1</v></c><c r="B3" t="b"><v>0</v></c><c r="C3" t="e">\
+<v>#DIV/0!</v></c><c r="D3" t="e"><v>#N/A</v></c></row>\
+<row r="4"><c t="s" r="A4"><v>2</v></c><c r="B4"><v>7</v></c><c r="C4"><f t="shared" \
+si="0" ref="C4:C5"/><v>8</v></c></row>\
+<row r="5"/>\
+<row r="6"><c r="C6" t="s"><v>3</v></c></row>\
+<row r="7"><c r="A7" t="s"><v>4</v></c></row>\
+<row r="8"><c r="A8" t="s"><v>5</v></c></row>\
+<row r="12"><c r="H12" t="s"><v>6</v></c></row>\
+</sheetData></worksheet>"""
+
+_EDGE_SST = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="7" \
+uniqueCount="7"><si><t>shared</t></si><si><t xml:space="preserve">  keep  </t></si>\
+<si><r><rPr><b/></rPr><t>bold</t></r><r><t xml:space="preserve"> then plain</t></r></si>\
+<si><t>&lt;tag&gt; &amp; &quot;quotes&quot; &apos;apos&apos; &#65;&#x42;</t></si>\
+<si><t/></si><si/><si><t>corner</t></si></sst>"""
+
+_EDGE_STYLES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts \
+count="2"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/><numFmt numFmtId="165" \
+formatCode="#,##0.00"/></numFmts><fonts count="1"><font><sz val="11"/><name \
+val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/>\
+</fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1">\
+<xf numFmtId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" xfId="0"/>\
+<xf numFmtId="14" xfId="0" applyNumberFormat="1"><alignment horizontal="left"/></xf>\
+<xf numFmtId="18" xfId="0" applyNumberFormat="1"/><xf numFmtId="22" xfId="0" \
+applyNumberFormat="1"/><xf numFmtId="165" xfId="0" applyNumberFormat="1"/></cellXfs>\
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>\
+</styleSheet>"""
+
+# rId1 -> sheetB.xml and rId2 -> sheetA.xml: the sheet *order* is the workbook's, not
+# the filenames'. A scanner that sorts part names gets both sheets' content swapped.
+_EDGE_WORKBOOK = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" \
+xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>\
+<sheet name="Edge Cases" sheetId="1" r:id="rId1"/><sheet name="Second &amp; Last" \
+sheetId="2" r:id="rId2"/></sheets></workbook>"""
+
+_EDGE_WORKBOOK_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/\
+relationships/worksheet" Target="worksheets/sheetB.xml"/><Relationship Id="rId2" \
+Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" \
+Target="worksheets/sheetA.xml"/><Relationship Id="rId3" Type="http://schemas.\
+openxmlformats.org/officeDocument/2006/relationships/sharedStrings" \
+Target="sharedStrings.xml"/><Relationship Id="rId4" Type="http://schemas.\
+openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>\
+</Relationships>"""
+
+_EDGE_SHEET_B = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>\
+<row r="1"><c r="A1" t="s"><v>6</v></c></row></sheetData></worksheet>"""
+
+_EDGE_ROOT_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/\
+relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"""
+
+_EDGE_CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default \
+Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\
+<Default Extension="xml" ContentType="application/xml"/><Override \
+PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.\
+spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheetB.xml" \
+ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\
+<Override PartName="/xl/worksheets/sheetA.xml" ContentType="application/vnd.\
+openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override \
+PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-\
+officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/styles.xml" \
+ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>\
+</Types>"""
+
+
+def write_edge(out: Path) -> None:
+    if out.exists():
+        print(f"  {out.name} exists, skipping")
+        return
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", _EDGE_CONTENT_TYPES)
+        archive.writestr("_rels/.rels", _EDGE_ROOT_RELS)
+        archive.writestr("xl/workbook.xml", _EDGE_WORKBOOK)
+        archive.writestr("xl/_rels/workbook.xml.rels", _EDGE_WORKBOOK_RELS)
+        archive.writestr("xl/worksheets/sheetB.xml", _EDGE_SHEET)
+        archive.writestr("xl/worksheets/sheetA.xml", _EDGE_SHEET_B)
+        archive.writestr("xl/sharedStrings.xml", _EDGE_SST)
+        archive.writestr("xl/styles.xml", _EDGE_STYLES)
+    print(f"  {out.name}: {out.stat().st_size / 1e3:.1f} kB, hand-written byte shapes")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--small", type=int, default=100_000)
+    parser.add_argument("--large", type=int, default=1_000_000)
+    parser.add_argument(
+        "--only",
+        nargs="*",
+        default=None,
+        help="subset of: small large small-shared large-shared types edge",
+    )
+    args = parser.parse_args()
+
+    FIXTURES.mkdir(parents=True, exist_ok=True)
+    jobs = {
+        "types": lambda: write_types(FIXTURES / "sheet-types.xlsx"),
+        "edge": lambda: write_edge(FIXTURES / "sheet-edge.xlsx"),
+        "small": lambda: write_sheet(
+            FIXTURES / "sheet-100k.xlsx", args.small, constant_memory=True
+        ),
+        "small-shared": lambda: write_sheet(
+            FIXTURES / "sheet-100k-shared.xlsx", args.small, constant_memory=False
+        ),
+        "large": lambda: write_sheet(
+            FIXTURES / "sheet-1m.xlsx", args.large, constant_memory=True
+        ),
+        "large-shared": lambda: write_sheet(
+            FIXTURES / "sheet-1m-shared.xlsx", args.large, constant_memory=False
+        ),
+    }
+    print("building XLSX fixtures:")
+    for name in args.only or jobs:
+        jobs[name]()
+
+
+if __name__ == "__main__":
+    main()

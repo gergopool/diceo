@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 580" width="940" height="580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" role="img" aria-label="Retrieval quality against throughput for 3 document extraction tools averaged across PDF, DOCX, PPTX, HTML, each drawn at three chunk sizes. Throughput is on a logarithmic horizontal axis, so further right is faster and higher is better. Measured on PDF + DOCX + PPTX + HTML, macro mean of the four · throughput for one document of each · XLSX measured but excluded on purpose, with every arm chunked by Diceo's splitter so the chunk-size aims mean the same thing on every line.">
+<style>@media (prefers-color-scheme: dark){.bg{fill:#0d1117}.t{fill:#e8e8e8}.d{fill:#9ca3af}.axis{stroke:#e8e8e8}.grid{stroke:#374151}.s-diceo{fill:#3bc9db;stroke:#3bc9db}.s-xberg{fill:#69db7c;stroke:#69db7c}.s-unstructured{fill:#da77f2;stroke:#da77f2}}</style>
+<rect class="bg" width="940" height="580" fill="#ffffff"/>
+<text x="78" y="32" class="t" fill="#1a1a1a" font-size="17.5" font-weight="700">PDF + DOCX + PPTX + HTML</text>
+<text x="78" y="54" class="d" fill="#6b7280" font-size="12.5">One line per tool, one marker per chunk-size aim: 600, 1,800 and 4,000 characters. They run vertical because extraction cost does not</text>
+<text x="78" y="72" class="d" fill="#6b7280" font-size="12.5">change with chunk size — a line's height is the quality range that tool spans at its fixed cost.</text>
+<path class="grid" d="M 120.9 98.0 L 121.6 163.9 L 121.6 229.7 L 121.6 296.0 L 120.4 361.6 L 121.7 428.2 L 120.9 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 407.0 98.0 L 406.4 164.2 L 406.2 229.6 L 406.5 296.3 L 407.4 362.2 L 407.1 427.5 L 407.0 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 693.0 98.0 L 693.6 164.2 L 693.5 229.3 L 692.7 296.2 L 692.7 361.7 L 693.0 428.1 L 693.0 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 78.0 494.0 L 160.3 493.5 L 242.1 493.4 L 324.0 493.9 L 405.3 494.5 L 486.4 493.4 L 568.9 493.6 L 650.5 494.5 L 732.0 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 78.0 428.0 L 160.0 428.0 L 242.0 428.0 L 323.5 428.4 L 404.4 428.0 L 487.3 428.8 L 568.3 428.3 L 649.5 428.5 L 732.0 428.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 78.0 362.0 L 159.3 362.3 L 241.3 362.7 L 323.7 362.4 L 404.5 361.9 L 486.1 361.9 L 568.5 362.7 L 649.9 361.8 L 732.0 362.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 78.0 296.0 L 160.2 296.4 L 241.0 296.2 L 324.0 295.7 L 405.0 296.4 L 486.6 296.3 L 568.1 296.3 L 649.5 296.3 L 732.0 296.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 78.0 230.0 L 160.1 229.4 L 241.8 230.3 L 322.8 229.4 L 405.1 229.9 L 487.4 229.7 L 568.9 230.5 L 650.6 230.8 L 732.0 230.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 78.0 164.0 L 159.1 164.4 L 241.8 163.6 L 322.8 163.7 L 405.6 163.8 L 486.5 163.7 L 569.2 164.7 L 649.8 163.7 L 732.0 164.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 78.0 98.0 L 159.9 97.6 L 241.1 98.5 L 323.0 97.3 L 404.6 97.6 L 487.5 97.4 L 567.7 97.5 L 650.0 98.2 L 732.0 98.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="axis" d="M 78.0 494.0 L 131.2 493.9 L 186.9 493.8 L 240.6 493.9 L 297.3 495.2 L 350.9 495.2 L 403.7 494.6 L 458.6 493.3 L 514.3 494.6 L 569.2 493.2 L 623.9 493.3 L 676.5 493.9 L 732.0 494.0" stroke="#1a1a1a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+<path class="axis" d="M 78.0 98.0 L 78.4 130.3 L 77.3 163.9 L 78.0 197.5 L 78.2 230.3 L 79.3 262.1 L 79.2 295.2 L 77.7 328.5 L 77.9 361.4 L 77.9 395.9 L 78.0 427.7 L 77.7 461.9 L 78.0 494.0" stroke="#1a1a1a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+<path class="axis" d="M 120.9 494.0 L 121.3 495.9 L 121.5 498.9 L 120.9 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="120.9" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">1</text>
+<path class="axis" d="M 407.0 494.0 L 406.8 496.4 L 406.7 499.2 L 407.0 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="407.0" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">10</text>
+<path class="axis" d="M 693.0 494.0 L 693.2 495.9 L 693.4 498.5 L 693.0 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="693.0" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">100</text>
+<path class="axis" d="M 71.0 494.0 L 73.6 494.3 L 75.4 493.5 L 78.0 494.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="65" y="499.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.60</text>
+<path class="axis" d="M 71.0 428.0 L 73.1 427.8 L 75.9 428.0 L 78.0 428.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="65" y="433.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.65</text>
+<path class="axis" d="M 71.0 362.0 L 73.0 362.2 L 76.0 362.5 L 78.0 362.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="65" y="367.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.70</text>
+<path class="axis" d="M 71.0 296.0 L 73.9 296.4 L 75.3 296.6 L 78.0 296.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="65" y="301.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.75</text>
+<path class="axis" d="M 71.0 230.0 L 73.4 229.4 L 75.1 229.9 L 78.0 230.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="65" y="235.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.80</text>
+<path class="axis" d="M 71.0 164.0 L 73.8 163.7 L 75.3 163.9 L 78.0 164.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="65" y="169.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.85</text>
+<path class="axis" d="M 71.0 98.0 L 73.9 97.8 L 75.6 97.8 L 78.0 98.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="65" y="103.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.90</text>
+<path class="s-xberg" d="M 575.6 190.7 L 576.1 213.5 L 574.6 235.3 L 575.4 259.1 L 574.6 281.3 L 575.1 303.7 L 575.6 327.1" stroke="#2b8a3e" stroke-width="2.0" fill="none" stroke-linecap="round" opacity="0.38"/>
+<path class="s-xberg" d="M 575.6 327.1 L 574.6 324.4 L 574.7 322.3 L 575.7 321.2 L 576.0 319.2 L 575.2 316.4 L 575.6 314.2" stroke="#2b8a3e" stroke-width="2.0" fill="none" stroke-linecap="round" opacity="0.38"/>
+<path class="s-xberg" d="M 581.1 190.7 L 580.0 192.5 L 579.6 194.6 L 577.8 195.9 L 575.6 195.6 L 573.2 196.6 L 571.8 194.5 L 570.7 192.8 L 570.8 190.7 L 570.8 188.7 L 572.0 187.0 L 573.3 185.1 L 575.6 185.3 L 577.7 185.6 L 579.0 187.4 L 580.1 188.9 L 581.3 190.7 Z" fill="#2b8a3e" fill-opacity="0.55" stroke="#2b8a3e" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<path class="s-xberg" d="M 575.8 320.4 L 582.8 327.2 L 575.5 334.1 L 568.9 327.0 Z" fill="#2b8a3e" fill-opacity="0.55" stroke="#2b8a3e" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<path class="s-xberg" d="M 575.3 307.0 L 582.0 319.5 L 568.8 319.3 Z" fill="#2b8a3e" fill-opacity="0.55" stroke="#2b8a3e" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<text x="563.6" y="195.7" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="end">Xberg</text>
+<path class="s-unstructured" d="M 147.7 294.5 L 148.0 309.9 L 147.0 326.7 L 148.1 342.4 L 148.7 359.2 L 146.7 376.2 L 147.7 391.8" stroke="#862e9c" stroke-width="2.0" fill="none" stroke-linecap="round" opacity="0.38"/>
+<path class="s-unstructured" d="M 147.7 391.8 L 148.4 393.7 L 146.6 394.6 L 146.7 394.8 L 148.5 394.4 L 146.9 395.8 L 147.7 397.4" stroke="#862e9c" stroke-width="2.0" fill="none" stroke-linecap="round" opacity="0.38"/>
+<path class="s-unstructured" d="M 152.6 294.5 L 153.5 296.9 L 152.0 298.8 L 149.9 299.8 L 147.7 300.5 L 145.7 299.2 L 143.5 298.6 L 142.9 296.4 L 142.7 294.5 L 142.9 292.5 L 143.8 290.6 L 145.6 289.4 L 147.7 289.1 L 149.7 289.5 L 151.2 290.9 L 153.6 292.0 L 152.6 294.5 Z" fill="#862e9c" fill-opacity="0.55" stroke="#862e9c" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<path class="s-unstructured" d="M 148.0 384.7 L 154.3 392.1 L 147.9 398.4 L 141.1 391.8 Z" fill="#862e9c" fill-opacity="0.55" stroke="#862e9c" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<path class="s-unstructured" d="M 147.6 390.3 L 154.2 402.3 L 140.9 402.3 Z" fill="#862e9c" fill-opacity="0.55" stroke="#862e9c" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<text x="159.7" y="299.5" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">Unstructured</text>
+<path class="s-diceo" d="M 603.2 138.8 L 604.0 150.0 L 602.6 159.6 L 602.8 170.7 L 604.3 181.9 L 603.1 191.7 L 603.2 202.8" stroke="#0b7285" stroke-width="3.2" fill="none" stroke-linecap="round" opacity="1.0"/>
+<path class="s-diceo" d="M 603.2 202.8 L 603.4 218.4 L 603.5 234.2 L 602.9 248.2 L 603.3 263.6 L 602.8 280.0 L 603.2 294.9" stroke="#0b7285" stroke-width="3.2" fill="none" stroke-linecap="round" opacity="1.0"/>
+<path class="s-diceo" d="M 611.5 138.8 L 610.0 141.6 L 608.5 144.1 L 606.3 146.3 L 603.2 146.2 L 600.1 146.2 L 598.1 143.8 L 595.8 141.8 L 595.3 138.8 L 596.4 136.0 L 597.7 133.3 L 600.1 131.2 L 603.2 130.3 L 606.0 131.9 L 608.2 133.7 L 610.2 135.9 L 611.2 138.8 Z" fill="#0b7285" fill-opacity="0.95" stroke="#0b7285" stroke-width="2.2" stroke-linejoin="round" stroke-opacity="1.0"/>
+<path class="s-diceo" d="M 603.1 193.0 L 612.6 202.6 L 603.5 211.9 L 593.8 202.8 Z" fill="#0b7285" fill-opacity="0.95" stroke="#0b7285" stroke-width="2.2" stroke-linejoin="round" stroke-opacity="1.0"/>
+<path class="s-diceo" d="M 603.5 284.9 L 612.2 301.6 L 593.8 301.8 Z" fill="#0b7285" fill-opacity="0.95" stroke="#0b7285" stroke-width="2.2" stroke-linejoin="round" stroke-opacity="1.0"/>
+<text x="615.2" y="143.8" class="t" fill="#1a1a1a" font-size="16.5" font-weight="700" text-anchor="start">Diceo</text>
+<text x="746" y="106" class="d" fill="#6b7280" font-size="11" font-weight="700" letter-spacing="0.6">TOOL</text>
+<path class="s-diceo" d="M 746.0 123.0 L 753.2 122.8 L 759.8 123.1 L 766.0 123.0" stroke="#0b7285" stroke-width="3.2" fill="none" stroke-linecap="round" opacity="1.0"/>
+<path class="s-diceo" d="M 761.9 123.0 L 761.0 125.1 L 759.6 126.6 L 758.4 128.8 L 756.0 127.9 L 753.6 128.8 L 752.7 126.3 L 751.1 125.0 L 751.0 123.0 L 750.0 120.5 L 752.3 119.3 L 753.9 117.9 L 756.0 117.8 L 758.2 117.6 L 760.4 118.6 L 761.5 120.7 L 761.8 123.0 Z" fill="#0b7285" fill-opacity="0.95" stroke="#0b7285" stroke-width="1.7" stroke-linejoin="round"/>
+<text x="776" y="128" class="t" fill="#1a1a1a" font-size="13.5" font-weight="700">Diceo</text>
+<text x="776" y="140" class="d" fill="#6b7280" font-size="10.5">Apache-2.0</text>
+<path class="s-xberg" d="M 746.0 155.0 L 753.3 155.6 L 759.1 154.5 L 766.0 155.0" stroke="#2b8a3e" stroke-width="2.0" fill="none" stroke-linecap="round" opacity="0.38"/>
+<path class="s-xberg" d="M 761.0 155.0 L 761.7 157.4 L 760.4 159.4 L 758.0 159.9 L 756.0 160.7 L 753.5 160.9 L 752.4 158.6 L 751.4 156.9 L 750.0 155.0 L 750.5 152.7 L 751.8 150.8 L 753.5 149.0 L 756.0 149.1 L 758.1 149.9 L 760.4 150.6 L 761.5 152.7 L 760.9 155.0 Z" fill="#2b8a3e" fill-opacity="0.55" stroke="#2b8a3e" stroke-width="1.7" stroke-linejoin="round"/>
+<text x="776" y="160" class="t" fill="#1a1a1a" font-size="13.5" font-weight="400">Xberg</text>
+<text x="776" y="172" class="d" fill="#6b7280" font-size="10.5">MIT</text>
+<path class="s-unstructured" d="M 746.0 187.0 L 752.8 187.7 L 759.7 187.3 L 766.0 187.0" stroke="#862e9c" stroke-width="2.0" fill="none" stroke-linecap="round" opacity="0.38"/>
+<path class="s-unstructured" d="M 760.8 187.0 L 761.3 189.2 L 760.4 191.4 L 758.4 192.7 L 756.0 192.0 L 753.8 192.4 L 752.6 190.4 L 750.9 189.1 L 749.8 187.0 L 750.4 184.7 L 752.1 183.1 L 753.7 181.5 L 756.0 181.6 L 758.4 181.3 L 760.1 182.9 L 761.4 184.8 L 762.4 187.0 Z" fill="#862e9c" fill-opacity="0.55" stroke="#862e9c" stroke-width="1.7" stroke-linejoin="round"/>
+<text x="776" y="192" class="t" fill="#1a1a1a" font-size="13.5" font-weight="400">Unstructured</text>
+<text x="776" y="204" class="d" fill="#6b7280" font-size="10.5">Apache-2.0</text>
+<text x="746" y="227" class="d" fill="#6b7280" font-size="11" font-weight="700" letter-spacing="0.6">CHUNK SIZE</text>
+<path class="d" d="M 760.9 244.0 L 761.0 246.1 L 759.5 247.5 L 757.9 248.7 L 756.0 250.3 L 753.7 249.5 L 752.6 247.4 L 750.4 246.3 L 750.0 244.0 L 750.4 241.7 L 752.3 240.3 L 753.8 238.6 L 756.0 238.8 L 758.4 238.3 L 759.7 240.3 L 762.0 241.5 L 761.4 244.0 Z" fill="#6b7280" fill-opacity="0.45" stroke="#6b7280" stroke-width="1.7" stroke-linejoin="round"/>
+<text x="776" y="248" class="t" fill="#1a1a1a" font-size="13.5">600 chars</text>
+<path class="d" d="M 756.0 258.2 L 763.1 264.9 L 755.7 272.2 L 749.0 264.7 Z" fill="#6b7280" fill-opacity="0.45" stroke="#6b7280" stroke-width="1.7" stroke-linejoin="round"/>
+<text x="776" y="270" class="t" fill="#1a1a1a" font-size="13.5">1,800 chars</text>
+<path class="d" d="M 756.1 278.5 L 762.7 291.2 L 749.2 290.8 Z" fill="#6b7280" fill-opacity="0.45" stroke="#6b7280" stroke-width="1.7" stroke-linejoin="round"/>
+<text x="776" y="290" class="t" fill="#1a1a1a" font-size="13.5">4,000 chars</text>
+<text x="405" y="536" class="t" fill="#1a1a1a" font-size="16" font-weight="600" text-anchor="middle">Throughput [doc/s/cpu]</text>
+<text x="24" y="296" class="t" fill="#1a1a1a" font-size="16" font-weight="600" text-anchor="middle" transform="rotate(-90 24 296)">Retrieval Quality</text>
+<path class="d" d="M 654.0 90.0 L 672.0 83.9 L 690.0 78.1 L 708.0 72.0" stroke="#6b7280" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+<path class="d" d="M 708.0 72.0 L 697.8 73.4 M 708.0 72.0 L 700.4 78.9" stroke="#6b7280" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="647" y="94" class="d" fill="#6b7280" font-size="12.5" font-style="italic" text-anchor="end">better</text>
+</svg>

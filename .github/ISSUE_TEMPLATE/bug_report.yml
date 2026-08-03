@@ -1,0 +1,59 @@
+name: Bug report
+description: Something diceo did wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **If diceo raised something that was not a `DiceoError`, that is always a bug** —
+        including a `KeyError`, a `struct.error`, a segfault or a hang. Say so and it will be
+        treated as one.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, and what diceo did.
+      placeholder: |
+        diceo report.pdf --diagnostics
+        → Traceback ... KeyError: 'w:tbl'
+    validations: { required: true }
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations: { required: true }
+
+  - type: textarea
+    id: file
+    attributes:
+      label: The document
+      description: |
+        **This is the part that makes it fixable.** If you can attach the file, do. If it is
+        confidential, the first few KB is usually enough to reproduce a parsing failure —
+        `head -c 4096 yourfile.docx > sample.bin` — or run
+        `diceo yourfile.docx --sniff` and `python -c "print(open('yourfile.docx','rb').read(16))"`
+        and paste both. A bug report without any bytes usually cannot be closed.
+    validations: { required: true }
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`diceo --version` and `python -VV`"
+    validations: { required: true }
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Format
+      options: [pdf, docx, xlsx, pptx, xls, xlsb, ods, csv, html, eml, text, "something else"]
+    validations: { required: true }
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: "Output of `diceo yourfile --diagnostics`, if it got that far."
+      render: json

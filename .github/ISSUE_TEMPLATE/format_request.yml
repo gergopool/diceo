@@ -1,0 +1,34 @@
+name: Format request
+description: Ask for a format diceo does not read
+labels: [format]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening this: `.doc`, `.ppt`, `.msg`, `.rtf`, `.odt`, `.odp` and EPUB are
+        **declined on purpose**, each with a reason and a conversion command in the error
+        message. If one of those reasons is wrong for your case, say which — that is a useful
+        issue. `.msg` in particular is blocked by licensing, not effort: the mature Python
+        reader is GPL, and depending on it would make diceo GPL.
+
+  - type: input
+    id: format
+    attributes:
+      label: Format
+    validations: { required: true }
+
+  - type: textarea
+    id: reader
+    attributes:
+      label: Is there a permissively-licensed reader for it?
+      description: |
+        The hard constraint is rule 1: no GPL/AGPL/SSPL in the default install, ever. A format
+        whose only good library is copyleft cannot be supported by default however much we want
+        it. Name the library and its licence if you know one.
+    validations: { required: true }
+
+  - type: textarea
+    id: volume
+    attributes:
+      label: How much of your corpus is this format?
+      description: A number beats an adjective when deciding what to build next.

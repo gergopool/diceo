@@ -1,0 +1,88 @@
+name: Release
+
+# Publishing is driven by a tag, so the thing on PyPI is always a commit anyone
+# can check out. `v0.1.0` builds and publishes; nothing else here ever runs.
+#
+# No API token exists anywhere in this repository or its secrets. PyPI's trusted
+# publishing mints a short-lived credential from the OIDC identity of this
+# workflow, in this repository, in the `pypi` environment -- a leaked secret is
+# not a class of accident that can happen if there is no secret.
+#
+# Setup, once, at https://pypi.org/manage/account/publishing/:
+#   PyPI project name  diceo
+#   Owner              gergopool
+#   Repository         diceo
+#   Workflow           release.yml
+#   Environment        pypi
+#
+# Every `uses:` is pinned to a full commit SHA, with the human-readable tag in the
+# comment beside it. A tag is a pointer its owner can move; `pypa/gh-action-pypi-
+# publish@release/v1` was a *branch*, in the one job that holds `id-token: write`,
+# which means anyone who could push to that branch could mint a PyPI credential for
+# this package. Bump these deliberately -- read the diff between the two SHAs -- and
+# never "tidy" one back into a tag.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Read-only by default. The publish job below asks for `id-token: write` explicitly
+# and gets nothing else; the build job never needs to write anything back.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - run: uv python install 3.11
+
+      # The tag and the version in the wheel must be the same string, or the
+      # release notes describe something other than what users install.
+      - name: Tag matches diceo.__version__
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(uv run --no-project --with . python -c 'import diceo; print(diceo.__version__)')"
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag $tag != diceo.__version__ $pkg" >&2
+            exit 1
+          fi
+
+      # Tests, lint and the licence gate run again here rather than being taken on
+      # trust from the CI run on the same commit. A release is the one job where
+      # "it was green an hour ago" is not evidence: nothing else in this repository
+      # is irreversible, and a wheel on PyPI cannot be replaced, only yanked.
+      - run: uvx --from rust-just just check
+
+      # `smoke` depends on `build`, so this is one build, not two: it produces the
+      # wheel, proves it contains the package and nothing else, then installs it
+      # into a fresh venv and imports it. The artifact uploaded below is the exact
+      # file that was smoke-tested.
+      - run: uvx --from rust-just just smoke
+
+      # The long description is rendered by PyPI, not by GitHub, and a README it
+      # rejects fails the upload after the version number is already burned.
+      - run: uvx twine check --strict dist/*
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment: pypi
+    permissions:
+      id-token: write  # the OIDC token trusted publishing exchanges for an upload
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
