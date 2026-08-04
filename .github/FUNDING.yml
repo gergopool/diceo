@@ -12,19 +12,26 @@
 # supporter feed is fine -- a supporter choosing to be visible is not us promising them
 # recognition.
 #
-# Buy Me a Coffee is the choice, and it is NOT the cheapest -- it takes ~5% on top of
-# payment processing, where GitHub Sponsors takes nothing from individuals. That is
-# deliberate: it is the page people recognise, and 5% of a small number is a small
-# number. Do not "fix" this back to GitHub Sponsors on fee grounds alone; it was decided
-# with the fees known.
+# **GitHub Sponsors tiers must have no rewards either.** Sponsors invites you to attach
+# benefits to each tier and that is precisely what D21 forbids; a tier carrying only a
+# description and nothing deliverable is fine. This is the one setting here that lives on
+# GitHub rather than in this file, so it cannot be reviewed by reading the repository --
+# check it on the Sponsors dashboard when changing anything.
 #
-# The handle below must match the one in the page's own URL (buymeacoffee.com/<handle>).
-# A funding link that 404s is worse than no button at all. Nothing renders until the
-# repository is public.
+# Both are enabled, which is a change from the original "one is enough". That earlier note
+# said not to switch to GitHub Sponsors on fee grounds alone, and this is not that: Sponsors
+# simply did not exist for this account when the choice was made. Buy Me a Coffee stays
+# because it is the page people recognise and its ~5% is 5% of a small number; Sponsors is
+# added because it takes nothing from individuals and is the one a company's finance
+# department can actually pay against an invoice. Two buttons, no perks behind either.
+#
+# Each handle must match the one in that platform's own URL (buymeacoffee.com/<handle>,
+# github.com/sponsors/<handle>). A funding link that 404s is worse than no button at all.
+# Nothing renders until the repository is public.
 
+github: gergopool
 buy_me_a_coffee: gergopool
 
-# Considered and not enabled -- one is enough:
-# github: gergopool          # 0% fee, best for a finance department paying an invoice
+# Considered and not enabled:
 # ko_fi: gergopool           # 0% platform fee, processor cut only
-# open_collective: diceo   # transparent ledger; worth it only if companies fund this
+# open_collective: diceo     # transparent ledger; worth it only if companies fund this
