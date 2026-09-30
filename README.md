@@ -12,29 +12,31 @@ your documents on their servers.
 **Diceo is 11 MB and gives you all three.** One function call, and what comes back is chunks
 shaped for retrieval rather than a wall of text.
 
-![Retrieval quality against CPU cost on PDF, with Diceo in the top-right corner of a field of ten extractors.](https://raw.githubusercontent.com/gergopool/diceo/main/docs/assets/positioning-mean-pdf.svg)
+![Diceo 0.1.1 and five comparison tools: mean PDF retrieval quality versus CPU cost.](https://raw.githubusercontent.com/gergopool/diceo/main/docs/assets/positioning-mean-pdf.svg)
 
-*In-house evaluation: every tool runs its own extraction and its own chunker, each chunk is
-embedded with `nvidia/Nemotron-3-Embed-1B-BF16`, and quality is recall: how often the chunk
-holding the answer comes back in the top five. [The full numbers](https://github.com/gergopool/diceo/blob/main/docs/benchmarks.md) — per format, per chunk
-size, and where we lose — and [the methodology](https://github.com/gergopool/diceo/blob/main/docs/methodology.md).*
+*In-house PDF evaluation: 44 held-out documents, 776 queries; mean answer-chunk recall in the
+top five at 600, 1,800 and 4,000 characters. Quality rechecked with one pinned Nemotron runtime
+on 2026-09-30; Diceo CPU remeasured, rival CPU costs carried from the earlier measured sitting.
+Four older tools lack cached text for this refresh and retain their historical results on
+[the benchmarks page](https://github.com/gergopool/diceo/blob/main/docs/benchmarks.md).
+[Methodology](https://github.com/gergopool/diceo/blob/main/docs/methodology.md).*
 
-- 🔥 **Nearly as fast as the fastest, nearly as good as the best** — and the only tools ahead of it
-  on either axis are copyleft, a problem in most commercial products. Among the tools that are
-  free for commercial use, Diceo leads on both axes at once.
-- 🌊 **It streams, in bounded memory** — chunks come out while the file is still being read, and a
-  404 MB, 2,409-page PDF peaks at 502 MB.
-- 🪶 **11 MB installed, two dependencies, 20 ms to import.** No GPU, no model download, no network,
-  no server — it runs in your own process and nothing is uploaded.
+- 🔥 **Fast extraction, content-aware chunks** — measured across chunk sizes and formats,
+  with original-document checks and the cases where we lose included in the benchmarks.
+- 🌊 **PDF, DOCX, XLSX, CSV and text stream** — chunks come out while the file is being read.
+  Legacy XLS/XLSB/ODS readers materialize native data; their memory use depends on the workbook.
+- 🪶 **11 MB installed, two dependencies, 20 ms to import.** No GPU, model download or server.
+  It runs in your own process; URL fetching happens only when you pass a URL.
 - 📚 **Eleven formats, one call, free for commercial use** — pdf, docx, xlsx, pptx, xls, xlsb, ods,
   csv, html, eml, text.
 
 ## 📄 How it works
 
-![One document goes into diceo.chunk() and chunks stream out. There is no intermediate file.](https://raw.githubusercontent.com/gergopool/diceo/main/docs/assets/how-it-works.webp)
+![One document goes into diceo.chunk() and chunks stream out.](https://raw.githubusercontent.com/gergopool/diceo/main/docs/assets/how-it-works.webp)
 
-No intermediate markdown, no document object, no temporary file — readers are generators yielding
-blocks and the chunker consumes them lazily, so chunks come out while the file is still being read.
+Readers yield blocks directly to the chunker, without an intermediate markdown document or a
+document object. Local files are read directly. URL downloads are made seekable before extraction;
+large responses spill to a temporary file rather than filling memory.
 
 ## 📦 Install
 
@@ -61,30 +63,38 @@ Costs were flat.
 
 That is the whole product: `embed_text` goes to your embedding model, `meta` to your vector store.
 `chunk()` is a generator — a 1,000-page report starts yielding immediately and never exists in
-memory whole. It takes a path, bytes, or any seekable binary file, and detects the format from
+memory whole. It takes an HTTP(S) URL, a path, bytes, or any seekable binary file, and detects the format from
 content:
 
 ```python
 diceo.chunk("report.pdf")                          # a path
 diceo.chunk(response.content, name="report.pdf")   # bytes
+diceo.chunk("https://dlmf.nist.gov/1.11")           # URL → clean HTML retrieval chunks
 ```
+
+URLs use the same readers and return `source_url` in chunk metadata. HTTP charset and redirects
+are honored. Downloads default to a 30-second socket timeout and 128 MiB body limit; tune them
+with `Limits(download_timeout=..., max_download_bytes=...)`. `extract(url)` and `sniff(url)`
+work too. JavaScript is not executed.
 
 There is a CLI too:
 
 ```bash
 diceo report.pdf                 # chunks as JSON lines
 diceo slides.pptx --diagnostics  # what would be missing from your index
+diceo https://dlmf.nist.gov/1.11 --text
 ```
 
 ## 🐍 The library
 
-Local, not a service: no server, no network call, nothing uploaded. Six names to learn, plus the
+Local, not a service: no server and nothing uploaded. Seven names to learn, plus the
 exceptions below, and `chunk` is the only one most people need.
 
 | name | what it gives you |
 |---|---|
 | `chunk(source, **opts)` | the chunks, as a generator |
 | `extract(source, **opts)` | the blocks, before they are packed into chunks |
+| `to_text(blocks)` | those blocks as markdown-ish text, for your own chunker |
 | `sniff(source)` | the format it detects — `"pdf"`, `"xlsx"`, … |
 | `Diagnostics()` | what got left out; hand one in, read it after |
 | `Limits(...)` | the knobs — `target_chars`, `max_pages`, `max_rows` |
@@ -106,8 +116,8 @@ bit-flipped, zip-bombed — no crash, no hang, nothing raised that was not a `Di
 Parallelism is yours: cheap import, picklable chunks, no hidden thread pool. Use **processes, not
 threads**, for PDFs — PDFium is not thread-safe. Diceo refuses zip bombs before inflating them,
 but it is a parser, not a sandbox: isolate untrusted input in a worker with limits
-([SECURITY.md](https://github.com/gergopool/diceo/blob/main/SECURITY.md)). Chunk boundaries are stable within a version, not across them — plan
-to re-embed on upgrade until 1.0.
+([SECURITY.md](https://github.com/gergopool/diceo/blob/main/SECURITY.md)). Chunk boundaries depend on
+Diceo and its backend versions — record both and plan to re-embed on upgrade until 1.0.
 
 ## 🔦 It tells you what it could not read
 
@@ -136,8 +146,8 @@ reason a wheel this small can read these formats at all.
   **[PDFium](https://pdfium.googlesource.com/pdfium/)** — the engine Chrome renders PDFs with.
   Two thirds of the cost of reading a PDF here is PDFium's C++, not ours.
 - **[python-calamine](https://github.com/dimastbk/python-calamine)**, binding Rust's
-  **[calamine](https://github.com/tafia/calamine)** — what makes a million-row sheet stream a row
-  at a time instead of loading whole.
+  **[calamine](https://github.com/tafia/calamine)** — the native legacy XLS/XLSB/ODS reader.
+  Its row iterator avoids a second full Python grid; XLSX streaming uses Diceo's own XML reader.
 
 Three more permissively-licensed projects were read closely enough that a design idea here traces
 to them. **Diceo contains no code from any of them** — nothing copied, ported or adapted, and no
@@ -165,3 +175,5 @@ exists all help. If it saves you real time:
 Contributions welcome: [CONTRIBUTING.md](https://github.com/gergopool/diceo/blob/main/CONTRIBUTING.md), and
 [docs/principles.md](https://github.com/gergopool/diceo/blob/main/docs/principles.md) holds the five rules
 that settle arguments here.
+
+Track fixes, performance checks and follow-up work on the [project board](https://github.com/users/gergopool/projects/3).

@@ -210,7 +210,7 @@ def test_html_keeps_the_outer_row(tmp_path):
     rows = _html_rows(_NESTED_HTML)
     joined = "\n".join(rows)
 
-    assert "INNER A\tINNER B" in rows, rows
+    assert "INNER A | INNER B" in rows, rows
     for text in ("OUTER 1", "OUTER 2", "OUTER 3", "ROW2 A", "ROW2 B"):
         assert text in joined, f"{text!r} vanished: {rows}"
 
@@ -226,10 +226,10 @@ def test_html_outer_row_is_not_cut_in_half():
 def test_html_second_row_survives():
     rows = _html_rows(_NESTED_HTML)
 
-    assert any(r == "ROW2 A\tROW2 B" for r in rows), rows
+    assert any(r == "ROW2 A | ROW2 B" for r in rows), rows
 
 
 def test_html_flat_table_unchanged():
     rows = _html_rows("<table><tr><td>a</td><td>b</td></tr></table>")
 
-    assert rows == ["a\tb"]
+    assert rows == ["a | b"]

@@ -6,6 +6,46 @@ than deleted — a benchmark history you cannot audit is marketing.
 The harness that produces these lives in the parent research repository, along with the full
 experiment record. This page is the outcome; that repository is the working.
 
+## 0.1.1 refresh — 2026-09-30
+
+The README hero now uses one pinned embedding checkpoint/runtime and freshly compatible
+vectors on the same 44 held-out PDFs / 776 queries at three chunk-size aims. Cached vectors
+from older runtimes are not mixed with newly encoded text. Diceo CPU is remeasured; comparison
+CPU costs remain explicitly carried measurements. Four older comparison tools whose cached
+texts are unavailable are omitted from this refresh; their historical tables below remain.
+
+| Tool | Mean `gold@5`, 600/1800/4000 | PDF docs/CPU-s |
+|---|---:|---:|
+| Diceo 0.1.1 | 0.767 | 44.59 |
+| Xberg | 0.745 | 13.09 |
+| LiteParse | 0.723 | 29.49 |
+| Unstructured | 0.719 | 0.601 |
+| MinerU | 0.714 | 0.0218 |
+| Extractous | 0.694 | 17.53 |
+
+**Change checks.** Relative to the frozen pre-update working tree, DOCX/PPTX/XLSX/HTML
+retrieval scores are unchanged at all three aims. PDF shifts are +0.26, −0.39 and −0.52
+percentage points; a strict universal PDF retrieval gain is not established. A separate
+36-real-document / 556-query check retains all hit, coverage and association results.
+
+**Cost checks.** Paired isolated measurements first identified CSV and legacy-sheet
+regressions, which were optimized before acceptance. Final focused public XLSX CPU is
+3.76% lower (90% paired interval: 3.14–3.89% lower); XLSB is 16.88% lower. CSV is effectively
+unchanged (−0.38% point estimate, interval includes zero). Large ODS peak current-process
+memory is 149.1 → 119.2 MiB. Measurements describe these corpora, not every document.
+
+**HTML comparison.** On twelve real public HTML documents, final Diceo chunking consumes
+1.1747 CPU seconds / 26.0 MiB peak current-process memory, compared with 4.724 CPU seconds
+for Trafilatura default TXT plus splitting: 4.02× faster on this sample. Twenty-seven
+selected substantive anchors and 114 selected authored math alternatives are retained.
+Trafilatura remains a benchmark tool, not a runtime dependency.
+
+**Provenance.** Research experiment 057; `scripts/bench057_improvements.py`, the paired
+retrieval harness and pinned checkpoint/cache namespace in `bench/embed.py`, public source
+hash manifest `bench/public/audit-056.jsonl`, and `scripts/plot057.py`. Original and candidate
+source snapshots, all accepted/rejected timing cells, raw rankings and chart inputs remain
+in the research record. GPU use is confined to that retrieval evaluation.
+
 **How to read this page.** Nothing below is an average across formats, because averaging across
 formats hides exactly the cases where a tool falls over. Losses are included. A benchmark table with
 no losses in it is read as marketing, and correctly discounted.
@@ -153,8 +193,8 @@ is the 29.49 row.
 **diceo's row is the only one with a replicate.** It was re-timed by the same harness later on
 2026-08-01 at **43.37** docs/CPU-second — 3.4% apart, the same order as the run-to-run spread a
 busy box produces, and the reason ratios derived from this table are quoted as ranges rather than
-to three figures. 44.88 is the published figure and the one the chart plots; the rivals were timed
-once, in the earlier of the two sessions.
+to three figures. 44.88 was the figure plotted for experiment 046; the rivals were timed once,
+in the earlier of the two sessions. The current 0.1.1 chart uses the refresh above.
 
 **Both MinerU rows exclude GPU time entirely.** They ran on an RTX 5070 Ti and `getrusage` cannot
 see any of it, so both figures are *generous* to MinerU, not harsh. `pipeline` also averages 2.63
@@ -439,8 +479,9 @@ two are level. Recovering structure is worth +8.0pp of retrieval, measured, and 
 indexing pipeline runs one worker per document on a box that is already busy, and there what you pay
 is CPU. Per CPU-second it processed **937× fewer documents** than we did, in 22× the memory
 (622 MB against 28 MB). Both sides of that ratio are experiment 054, same sitting —
-~~879×~~ from 024 and ~~≈1,030×~~ from dividing 036 by 024 are superseded. `docs/assets/positioning.svg`
-plots those same two cells, so the chart and this page agree by construction.
+~~879×~~ from 024 and ~~≈1,030×~~ from dividing 036 by 024 are superseded. The historical
+`docs/assets/positioning.svg` plots those 054 cells; the current README hero uses the 0.1.1
+refresh above, which omits tools whose cached text was unavailable for consistent rescoring.
 
 **MarkItDown is measured on the same axis, and this is the ratio a batch caller pays.**
 Documents per CPU-second, ours over theirs, by format:
@@ -609,5 +650,6 @@ declared licence.
   a commercial pipeline mostly sees.
 
 The claim we do make is narrower and, we think, the useful one: **near the top on both speed and
-retrieval quality at once, under a licence you can ship, in memory that does not grow, and it tells
-you what it could not read.** Each of those alone is solved by something. Together is the gap.
+retrieval quality at once, under a licence you can ship, with bounded PDF windows and incremental
+chunk packing, and it tells you what it could not read.** Legacy spreadsheet native allocation
+still depends on workbook size; large single rows also require memory proportional to that row.

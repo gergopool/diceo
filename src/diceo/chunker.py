@@ -52,9 +52,18 @@ def _split_long(text: str, target: int) -> list[str]:
     end = len(text)
     while end - start > target:
         window = text[start : start + target]
-        cut = max(window.rfind(". "), window.rfind("! "), window.rfind("? "))
+        cut = max(
+            window.rfind(". "),
+            window.rfind("! "),
+            window.rfind("? "),
+            # CJK sentence ends take no space after them.
+            window.rfind("。"),
+            window.rfind("！"),
+            window.rfind("？"),
+        )
         if cut < floor:
-            cut = window.rfind(" ")
+            # A newline is a word boundary too: a list of URLs has no spaces at all.
+            cut = max(window.rfind(" "), window.rfind("\n"))
         if cut < floor:
             cut = target - 1
         # Belt to `Limits.__post_init__`'s braces. Every branch above can leave `cut`
@@ -89,11 +98,20 @@ class _Packer:
         self.table_target = limits.resolved_table_chars()
         self.diagnostics = diagnostics
         self.pending: list[Block] = []
-        self.trail: list[str] = []
-        self.table: list[Block] = []
-        #: Consecutive `list_item` blocks, buffered exactly as `table` is when
-        #: `limits.list_group_size` is set. Bounded by one list run, the same bound
-        #: `table` carries, so streaming is preserved.
+        #: ``(level, text)`` of the open headings. By level, not position: a document
+        #: that starts at H2 made its first H2 the title of every sibling after it.
+        self.trail: list[tuple[int, str]] = []
+        #: The trail before the trailing run of held headings. Those headings move
+        #: to the next chunk, so the chunk being flushed must not be labelled by them.
+        self.trail_before_heads: list[tuple[int, str]] = []
+        self.table_header: Block | None = None
+        self.table: list[str] = []
+        self.table_chars = 0
+        self.table_budget = 0
+        self.table_caption: str | None = None
+        self.table_one_row = False
+        #: Consecutive `list_item` blocks, buffered when grouping is requested.
+        # ponytail: a whole list run; stream groups if this optional mode needs bounds.
         self.list_run: list[Block] = []
         self.list_group = max(0, limits.list_group_size)
         self.offset = 0
@@ -135,8 +153,8 @@ class _Packer:
             text=body,
             index=self.index,
             doc_id=self.doc_id,
-            title=self.trail[0] if self.trail else "",
-            breadcrumb=" > ".join(self.trail[1:]) if len(self.trail) > 1 else "",
+            title=self.trail[0][1] if self.trail else "",
+            breadcrumb=" > ".join(text for _, text in self.trail[1:]),
             kinds=tuple(dict.fromkeys(b.kind for b in self.pending)),
             locator=self.pending[0].locator,
             char_start=self.offset,
@@ -151,7 +169,6 @@ class _Packer:
 
     def flush(self) -> Iterator[Chunk]:
         if self.pending and any(b.text.strip() for b in self.pending):
-            self.diagnostics.chunks += 1
             yield self._build()
         else:
             self.pending = []
@@ -162,66 +179,31 @@ class _Packer:
         carried: list[Block] = []
         while self.pending and self.pending[-1].is_heading:
             carried.insert(0, self._drop_last())
-        yield from self.flush()
+        if carried:
+            trail, self.trail = self.trail, self.trail_before_heads
+            yield from self.flush()
+            self.trail = trail
+        else:
+            yield from self.flush()
         self.pending = carried
         self.pending_chars = sum(len(b.text) for b in carried)
 
     def close_table(self) -> Iterator[Chunk]:
-        """Emit buffered table rows as header-carrying groups (D6)."""
-        if not self.table:
+        """Finish the current group, retaining the one-row table special case."""
+        header = self.table_header
+        if header is None:
             return
-
-        # A single detected row has no header to repeat, and treating it as its own
-        # header emitted it twice -- measured on held-out data, where a wide table's
-        # rows arrive one at a time because its header cells wrap onto separate
-        # lines. The duplicate wasted a third of the chunk budget and added nothing.
-        if len(self.table) == 1:
-            row = self.table[0]
+        self.table_header = None
+        if self.table:
+            self._append_group(header, self.table, self.table_caption)
             self.table = []
-            if self.pending and self.size + len(row.text) > self.target:
+            self.table_chars = 0
+        else:
+            # Wait for a second row before interpreting the first as a header:
+            # repeating a single detected row would duplicate its data.
+            if self.pending and self.size + len(header.text) > self.target:
                 yield from self._flush_carrying_headings()
-            self._hold(row)
-            return
-
-        header = self.table[0]
-        rows = self.table[1:]
-
-        one_row_per_group = _wants_one_row_per_group(header.text, self.table_target)
-
-        # A wide table's rows are spread over several chunks, and the *caption* is
-        # usually the only place the metric is named -- "energy intensity",
-        # "kWh/pallet". Left where it is, it reaches the first chunk and no other, so
-        # 79% of held-out wide-table chunks had nothing for such a query to match.
-        # Measured on the 52 held-out wide-table queries: the 14 whose row landed in
-        # the caption-bearing chunk scored 14/14, the other 38 scored 8/38
-        # (Fisher p = 1.8e-7). See 030.
-        #
-        # Taken out of `pending` rather than copied, so it appears exactly once per
-        # group instead of twice in the first chunk.
-        caption = self._take_caption() if one_row_per_group else None
-        overhead = len(header.text) + (len(caption) + 1 if caption else 0)
-        budget = max(self.table_target - overhead - 1, len(header.text))
-
-        group: list[str] = []
-        # Carried rather than re-summed per row: `sum(map(len, group))` inside the
-        # loop is quadratic in the rows one group holds, and a group holds as many
-        # rows as fit in `budget` -- so a table of short rows (a sheet-shaped one, a
-        # narrow PDF table) paid thousands of length lookups to place each row. Same
-        # arithmetic, same cuts.
-        group_chars = 0
-        for row in rows:
-            too_big = group and group_chars + len(row.text) > budget
-            if (one_row_per_group or too_big) and group:
-                self._append_group(header, group, caption)
-                if self.size >= self.target:
-                    yield from self.flush()
-                group = []
-                group_chars = 0
-            group.append(row.text)
-            group_chars += len(row.text)
-        if group:
-            self._append_group(header, group, caption)
-        self.table = []
+            self._hold(header)
 
     def _take_caption(self) -> str | None:
         """Remove and return the table's caption, if the block before it is one.
@@ -276,13 +258,20 @@ class _Packer:
         # and the same chunk count -- only the redundant prefix goes.
         if self.pending:
             last = self.pending[-1]
-            if last.kind == "table_row" and last.text.startswith(prefix):
+            if prefix and last.kind == "table_row" and last.text.startswith(prefix):
                 merged = "\n".join([last.text, *group])
                 self.pending[-1] = last._replace(text=merged)
                 self.pending_chars += len(merged) - len(last.text)
                 return
 
-        self._hold(Block("table_row", "\n".join([prefix, *group]), 0, header.locator))
+        self._hold(
+            Block(
+                "table_row",
+                "\n".join([prefix, *group]) if prefix else "\n".join(group),
+                0,
+                header.locator,
+            )
+        )
 
     def close_list_run(self) -> Iterator[Chunk]:
         """Emit buffered list items in groups of at most ``list_group``.
@@ -321,8 +310,44 @@ class _Packer:
             return
 
         if block.kind in ("table_row", "sheet_row"):
-            yield from self.close_list_run()
-            self.table.append(block._replace(text=text))
+            if self.list_run:
+                yield from self.close_list_run()
+            if block.locator.row == 0 and self.table_header is not None:
+                # Adjacent tables can have no nonempty paragraph between them.
+                yield from self.close_table()
+            # A leading tab or ` | ` is an empty first cell: keep its column.
+            row_text = block.text.strip(" \r\n")
+            header = self.table_header
+            if header is None:
+                self.table_header = block._replace(text=row_text)
+                return
+            if not self.table:
+                # PDF row zero is a recovered header. An unresolved first DATA
+                # row belongs in the group once, without becoming a repeated label.
+                if header.locator.page >= 0 and header.locator.row < 0:
+                    self.table = [header.text]
+                    self.table_chars = len(header.text)
+                    header = header._replace(text="")
+                    self.table_header = header
+                self.table_one_row = _wants_one_row_per_group(header.text, self.table_target)
+                # Wide rows need their short caption in every group (experiment 030).
+                self.table_caption = self._take_caption() if self.table_one_row else None
+                overhead = len(header.text) + (
+                    len(self.table_caption) + 1 if self.table_caption else 0
+                )
+                self.table_budget = max(self.table_target - overhead - 1, len(header.text))
+            if self.table and (
+                self.table_one_row or self.table_chars + len(row_text) > self.table_budget
+            ):
+                # The next row closes the previous group, exactly as the buffered
+                # algorithm did. Append before flushing to preserve retrieval cuts.
+                self._append_group(header, self.table, self.table_caption)
+                self.table = []
+                self.table_chars = 0
+                if self.size >= self.target:
+                    yield from self.flush()
+            self.table.append(row_text)
+            self.table_chars += len(row_text)
             return
         yield from self.close_table()
 
@@ -353,8 +378,11 @@ class _Packer:
             if self.size >= self.target // 3:
                 yield from self.flush()
             level = max(block.level, 1)
-            del self.trail[level - 1 :]
-            self.trail.append(text)
+            if not (self.pending and self.pending[-1].is_heading):
+                self.trail_before_heads = list(self.trail)
+            while self.trail and self.trail[-1][0] >= level:
+                self.trail.pop()
+            self.trail.append((level, text))
             self._hold(block._replace(text=text))
             return
 
@@ -431,27 +459,30 @@ def chunk_blocks(
     emitted_chars = 0
     deadline = None if limits.max_seconds is None else monotonic() + limits.max_seconds
 
+    # A truncation is recorded when a chunk past the limit actually arrives, not the
+    # moment the limit is reached: a document that fits exactly lost nothing.
+    cap = limits.max_chars
     for block in blocks:
         if deadline is not None and monotonic() > deadline:
             diagnostics.truncate(f"max_seconds={limits.max_seconds}")
             break
         diagnostics.blocks += 1
         for chunk in packer.add(block):
-            emitted_chars += len(chunk.text)
-            yield chunk
-            if limits.max_chars is not None and emitted_chars >= limits.max_chars:
-                diagnostics.truncate(f"max_chars={limits.max_chars}")
+            if cap is not None and emitted_chars >= cap:
+                diagnostics.truncate(f"max_chars={cap}")
                 return
-    final = packer.finish()
-    if limits.max_chars is None:
-        yield from final
-        return
-    for chunk in final:
-        emitted_chars += len(chunk.text)
-        yield chunk
-        if emitted_chars >= limits.max_chars:
-            diagnostics.truncate(f"max_chars={limits.max_chars}")
+            emitted_chars += len(chunk.text)
+            diagnostics.chunks += 1
+            diagnostics.chars = emitted_chars
+            yield chunk
+    for chunk in packer.finish():
+        if cap is not None and emitted_chars >= cap:
+            diagnostics.truncate(f"max_chars={cap}")
             return
+        emitted_chars += len(chunk.text)
+        diagnostics.chunks += 1
+        diagnostics.chars = emitted_chars
+        yield chunk
 
 
 __all__ = ["chunk_blocks"]

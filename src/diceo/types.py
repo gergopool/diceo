@@ -264,6 +264,12 @@ class Limits:
     document is the 2,400-page one. Without it the only options are a timeout that
     kills the worker (losing the chunks already produced) or no bound at all."""
 
+    download_timeout: float = 30.0
+    """Socket timeout in seconds for explicitly supplied HTTP(S) URLs."""
+
+    max_download_bytes: int = 128 * 1024**2
+    """Maximum downloaded/decompressed URL body size; local files are unaffected."""
+
     reopen_every: int = 100
     """Pages between closing and reopening a PDF. PDFium caches every parsed
     indirect object for the document's lifetime with no public purge, so without this
@@ -341,6 +347,10 @@ class Limits:
             raise ValueError(
                 f"max_seconds={self.max_seconds} must be positive; use None for no budget"
             )
+        if not 0 < self.download_timeout < float("inf"):
+            raise ValueError("download_timeout must be finite and positive")
+        if self.max_download_bytes <= 0:
+            raise ValueError("max_download_bytes must be positive")
 
     def resolved_table_chars(self) -> int:
         """The size aim to use for table row-groups, with the default filled in.
@@ -377,6 +387,12 @@ class Diagnostics:
     """Pages with no text that *do* draw an image: pictures of text, needing OCR.
     The distinction from `pages_without_text` is the whole point -- a blank
     separator page is fine, a scanned page is a document missing from the index."""
+
+    pages_image_mixed: int = 0
+    """Pages with substantial unread image content alongside their text layer."""
+
+    pages_unreadable_text: int = 0
+    """Pages whose text mapping yielded Unicode replacement characters."""
 
     chars: int = 0
     """Characters that reached the caller. The same thing for every format, which is
@@ -440,7 +456,11 @@ class Diagnostics:
         by `pages_without_text` and by a note; this flag means *there is content
         we could not read*.
         """
-        return self.pages_image_only > 0
+        return (
+            self.pages_image_only > 0
+            or self.pages_image_mixed > 0
+            or self.pages_unreadable_text > 0
+        )
 
     def as_dict(self) -> dict:
         """Every counter plus the two verdicts, flat and JSON-serialisable.
@@ -455,6 +475,8 @@ class Diagnostics:
             "pages": self.pages,
             "pages_without_text": self.pages_without_text,
             "pages_image_only": self.pages_image_only,
+            "pages_image_mixed": self.pages_image_mixed,
+            "pages_unreadable_text": self.pages_unreadable_text,
             "sheets": self.sheets,
             "rows": self.rows,
             "chars": self.chars,

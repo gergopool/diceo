@@ -14,6 +14,13 @@ some of them are.
 
 What that means for this package:
 
+- **Explicit HTTP(S) URL inputs** use a 30-second socket timeout and a 128 MiB download
+  limit by default (`Limits.download_timeout` / `max_download_bytes`). The byte limit
+  covers both encoded and decompressed bodies. Redirect bodies are closed without being
+  drained; only HTTP(S) redirects are followed. Larger downloads spill to a seekable
+  temporary file, which is closed with the iterator. Callers decide which hosts may be
+  accessed when accepting URLs from other people; these socket timeouts are not a hard
+  end-to-end deadline.
 - **A malformed or malicious document must not crash the process, hang it, or exhaust memory.**
   It must produce a `DiceoError` or partial output plus diagnostics.
   `tests/test_robustness.py` holds this over several hundred deliberately broken files on every
@@ -78,7 +85,8 @@ What that means for this package:
 
 ## Supply chain
 
-Two runtime dependencies, both permissively licensed, no system binaries and
-no network access at runtime. `just license-check` builds a clean environment and fails if a
+Two runtime dependencies, both permissively licensed, and no system binaries.
+Local document processing needs no network; explicitly supplied URLs are fetched over HTTP(S).
+`just license-check` builds a clean environment and fails if a
 GPL/AGPL/SSPL package appears transitively. diceo never downloads a model, phones home, or
 reads configuration from the environment.

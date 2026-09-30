@@ -41,7 +41,7 @@ thousands of times.
 
 from __future__ import annotations
 
-from diceo.api import chunk, extract, sniff
+from diceo.api import chunk, extract, sniff, to_text
 from diceo.chunker import chunk_blocks
 from diceo.errors import (
     CorruptDocument,
@@ -54,7 +54,7 @@ from diceo.errors import (
 from diceo.source import SUPPORTED as _SUPPORTED
 from diceo.types import Block, Chunk, Diagnostics, Limits, Locator
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 #: Every format :func:`chunk` accepts, as :func:`sniff` names them. Importable so a
 #: caller can filter a crawl before opening anything.
@@ -91,4 +91,5 @@ __all__ = [
     "chunk_blocks",
     "extract",
     "sniff",
+    "to_text",
 ]

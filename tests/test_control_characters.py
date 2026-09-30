@@ -83,13 +83,14 @@ def test_a_clean_pdf_counts_none(tmp_path):
 
 
 def test_tabs_and_newlines_are_not_control_characters(tmp_path):
-    """DOCX emits `\\t` for `w:tab` and `\\n` for `w:br`, and HTML rows are
-    tab-separated. A blanket strip of C0 would quietly destroy every table row."""
-    paths = write_every_format(tmp_path)
+    """DOCX emits `\\t` for `w:tab` and `\\n` for `w:br`, and text files carry
+    tab-separated columns. A blanket strip of C0 would quietly destroy both."""
+    path = tmp_path / "cols.txt"
+    path.write_text("Region\tTotal\nEMEA\t1200\n")
 
-    joined = "".join(piece.text for piece in diceo.chunk(paths[".html"]))
+    joined = "".join(piece.text for piece in diceo.chunk(path))
 
-    assert "\t" in joined, "HTML table rows are tab-separated"
+    assert "Region\tTotal\nEMEA\t1200" in joined
 
 
 def test_no_format_leaks_a_control_character(tmp_path):

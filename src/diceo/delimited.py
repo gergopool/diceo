@@ -361,9 +361,6 @@ def _iter_rows(
             # normal row, a handful for a multi-line cell, the whole file for a runaway
             # quote. Free, and O(1): no row is held to compute it.
             spanned, consumed = reader.line_num - consumed, reader.line_num
-            if max_rows is not None and number > max_rows:
-                report.truncated.append(("max_rows", max_rows, -1))
-                return
             # A runaway quote always eats newlines, so a single-line row cannot be one
             # and pays nothing but the comparison above. Only the widest field is
             # examined: nothing narrower swallowed the file.
@@ -380,8 +377,17 @@ def _iter_rows(
                         "is in the index as one cell rather than as rows"
                     )
             cells = [field.strip() for field in fields]
-            if not any(cells):
+            # Trailing blanks trimmed as the xlsx reader does: an export that ends
+            # every line in a comma must not grow a phantom empty column.
+            while cells and not cells[-1]:
+                cells.pop()
+            if not cells:
                 continue
+            # Counted on emitted rows, as the other readers do: blank lines used to
+            # spend the budget and could truncate a file to its header alone.
+            if max_rows is not None and report.rows >= max_rows:
+                report.truncated.append(("max_rows", max_rows, -1))
+                return
             report.rows += 1
             report.cells += len(cells)
             yield Row(sheet=sheet, number=number, cells=cells)

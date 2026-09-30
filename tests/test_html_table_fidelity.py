@@ -40,7 +40,7 @@ def _blocks(html: str) -> list[tuple[str, str]]:
 
 
 def _rows(html: str) -> list[list[str]]:
-    return [text.split("\t") for kind, text in _blocks(html) if kind == "table_row"]
+    return [text.split(" | ") for kind, text in _blocks(html) if kind == "table_row"]
 
 
 # --------------------------------------------------------------------------- #
@@ -85,7 +85,7 @@ def test_a_heading_in_a_cell_is_the_cell_text():
     """Infobox markup. It used to emit a `heading`, which also corrupts the trail."""
     html = "<table><tr><th><h3>Region</h3></th><td>1</td></tr></table>"
 
-    assert _blocks(html) == [("table_row", "Region\t1")]
+    assert _blocks(html) == [("table_row", "Region | 1")]
 
 
 def test_wrapped_cells_still_honour_colspan_and_empty_cells():
@@ -171,8 +171,8 @@ def test_the_chunk_a_reader_gets_has_one_row_per_row():
     assert len(pieces) == 1
     body = pieces[0].text
     assert body.count("\n") == 1, body
-    assert "Northern Europe\t5" in body
-    assert "Region\tTotal" in body, "the header must still travel with the row"
+    assert "Northern Europe | 5" in body
+    assert "Region | Total" in body, "the header must still travel with the row"
 
 
 def test_a_newline_in_alt_text_is_a_space():
@@ -197,9 +197,9 @@ def test_an_ordinary_table_is_byte_for_byte_what_it_was():
         "<tr><td>APAC</td><td>800</td><td>64</td></tr>"
         "</table>"
     ) == [
-        ("table_row", "Region\tQ1\tQ2"),
-        ("table_row", "EMEA\t1200\t91"),
-        ("table_row", "APAC\t800\t64"),
+        ("table_row", "Region | Q1 | Q2"),
+        ("table_row", "EMEA | 1200 | 91"),
+        ("table_row", "APAC | 800 | 64"),
     ]
 
 
@@ -212,8 +212,8 @@ def test_ordinary_prose_still_becomes_the_blocks_it_always_did():
         ("heading", "Title"),
         ("paragraph", "First para."),
         ("paragraph", "A div."),
-        ("list_item", "one"),
-        ("list_item", "two"),
+        ("list_item", "- one"),
+        ("list_item", "- two"),
         ("paragraph", "Last."),
     ]
 

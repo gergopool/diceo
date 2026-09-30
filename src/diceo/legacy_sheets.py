@@ -10,14 +10,11 @@ dependency and, until now, only used by the benchmark harness. It is the right
 tool for these three: BIFF8 (``.xls``) and the binary ``.xlsb`` are record
 formats whose Python implementations are otherwise slow, unmaintained, or both.
 
-**One honest limitation, stated in the diagnostics rather than in a footnote.**
-calamine materialises a whole sheet to hand it over -- there is no row-streaming
-entry point in the Python binding -- so these three formats are the one place
-diceo breaks rule 2 (stream, never materialise). For ``.xls`` that is bounded by
-the format itself: BIFF8 cannot exceed 65,536 rows x 256 columns, so the worst
-case is fixed and small. For ``.xlsb`` and ``.ods`` it is not bounded, so
-``Limits.max_rows`` is enforced and a note records that peak memory scaled with
-the sheet. A caller indexing untrusted workbooks should set ``max_rows``.
+Calamine's row iterator avoids a second whole-sheet Python grid. Tiny XLS sheets
+use bulk conversion capped at 4K physical cells. Its native reader still
+materialises sheet data, and ODS eagerly reads the whole workbook.
+``Limits.max_rows`` bounds emitted rows, not that underlying allocation; the
+diagnostics state this for the formats without BIFF8's fixed size ceiling.
 """
 
 from __future__ import annotations
@@ -243,7 +240,7 @@ def iter_rows(
     """
     report = diagnostics if diagnostics is not None else SheetDiagnostics()
     try:
-        from python_calamine import CalamineWorkbook
+        from python_calamine import CalamineWorkbook, SheetVisibleEnum
     except ImportError as exc:  # pragma: no cover - a declared dependency
         raise CorruptDocument(
             f"reading {kind} needs python-calamine, which is a required dependency "
@@ -277,26 +274,45 @@ def iter_rows(
         ) from exc
 
     if kind != "xls":
-        # Emitted unconditionally, and it no longer recommends `max_rows`. It used
-        # to fire only when `max_rows` was None and read "set Limits.max_rows to
-        # bound memory on untrusted files" -- which is false, and the note a caller
-        # worrying about hostile input is most likely to act on. `to_python()`
-        # below materialises the entire sheet before the first row is seen, so
-        # `max_rows` bounds what is *emitted* and cannot bound what is *allocated*.
-        # Setting it also silenced the warning, so the caller who took the advice
-        # was the one who stopped being told.
+        # The Python iterator is incremental; the native reader is not. ODS in
+        # particular allocates every sheet before the cover's first row is read.
+        allocation = "workbook" if kind == "ods" else "sheet"
         report.notes.append(
-            f"{kind} is read whole per sheet (no streaming reader exists), so peak "
-            f"memory is set by the largest sheet; Limits.max_rows bounds the rows "
-            f"emitted, not that allocation"
+            f"{kind} has no streaming reader for native {allocation} data; rows are "
+            f"converted to Python incrementally. Limits.max_rows bounds the rows "
+            f"emitted, not the native {allocation} allocation"
         )
+
+    sheets_metadata = book.sheets_metadata
+    for metadata in sheets_metadata:
+        if metadata.visible != SheetVisibleEnum.Visible:
+            state = (
+                "veryHidden" if metadata.visible == SheetVisibleEnum.VeryHidden else "hidden"
+            )
+            report.sheets_hidden.append((metadata.name, state))
 
     # Not `name`: that is the caller's name for the *document*, and rebinding it here
     # would leave any later refusal message calling the file after its last sheet.
-    for sheet in book.sheet_names:
+    for metadata in sheets_metadata:
+        sheet = metadata.name
         report.sheets += 1
         try:
-            grid = book.get_sheet_by_name(sheet).to_python(skip_empty_area=False)
+            data = book.get_sheet_by_name(sheet)
+            # iter_rows keeps leading rows, but omits leading columns. Restoring
+            # that padding preserves the column positions of to_python(False).
+            start = data.start
+            prefix = []
+            if start is None:
+                grid = iter(())
+            else:
+                end = data.end
+                # ponytail: bulk conversion is capped at 4K physical cells;
+                # large sheets keep the iterator and its lower memory peak.
+                if kind == "xls" and (end[0] + 1) * (end[1] + 1) <= 4096:
+                    grid = data.to_python(skip_empty_area=False)
+                else:
+                    prefix = [""] * start[1]
+                    grid = data.iter_rows()
         except Exception as exc:
             # One unreadable sheet must not lose the other twelve (rule 3).
             report.sheets_without_part.append(f"{sheet}: {exc}")
@@ -307,8 +323,19 @@ def iter_rows(
             if max_rows is not None and emitted >= max_rows:
                 report.truncated.append(("max_rows", max_rows, -1))
                 break
-            text_cells = ["" if cell is None else _format(cell, report) for cell in cells]
-            if not any(cell.strip() for cell in text_cells):
+            if kind == "ods":
+                text_cells = ["" if cell is None else _format(cell, report) for cell in cells]
+            else:
+                text_cells = [
+                    _format(cell, report) if cell or (cell is not None and cell != "") else ""
+                    for cell in cells
+                ]
+            if prefix:
+                text_cells[:0] = prefix
+            # Same trim as the xlsx reader, so one table reads the same from any format.
+            while text_cells and not text_cells[-1].strip():
+                text_cells.pop()
+            if not text_cells:
                 continue
             emitted += 1
             report.rows += 1

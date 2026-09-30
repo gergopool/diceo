@@ -24,7 +24,7 @@ files and one that stops at the first bad byte.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import ExitStack
 from pathlib import Path
 from typing import IO
@@ -145,25 +145,26 @@ def _pdf_blocks(src: Source, limits: Limits, report: Diagnostics) -> Iterator[Bl
             tables=limits.detect_tables,
             furniture=limits.suppress_furniture,
             reopen_every=limits.reopen_every,
+            # A cap on the pages *read*: checked only against blocks, pages with no
+            # text past the limit were still opened to the end of the file.
+            page_range=None if limits.max_pages is None else range(limits.max_pages),
             diagnostics=stats,
         )
         for item in stream:
-            if limits.max_pages is not None and item.page >= limits.max_pages:
-                report.truncate(f"max_pages={limits.max_pages}")
-                break
             pages_seen = max(pages_seen, item.page + 1)
             yield Block(
                 kind="paragraph" if item.kind == "para" else item.kind,
                 text=item.text,
                 level=item.level or 0,
-                locator=Locator(page=item.page),
+                locator=Locator(page=item.page, row=item.row),
             )
+        if limits.max_pages is not None and stats.get("page_count", 0) > limits.max_pages:
+            report.truncate(f"max_pages={limits.max_pages}")
     finally:
         # In a `finally` so the counts are right even when the caller stops early
         # with `islice` -- a partial read must still report what it saw.
         report.pages = stats.get("pages", pages_seen)
         report.pages_without_text = stats.get("pages_without_text", 0)
-        report.chars = stats.get("chars", 0)
         # Running heads and feet are removed, not lost: they repeat on every page, so a
         # copy in every chunk is pure noise (33: 31.6% of chunks carried them). Reported
         # because it is a deliberate removal of text that was in the document.
@@ -225,6 +226,28 @@ def _pdf_blocks(src: Source, limits: Limits, report: Diagnostics) -> Iterator[Bl
                 f"pictures of a page, not text -- they need OCR or their content is "
                 f"absent from your index"
             )
+        mixed = stats.get("pages_image_mixed") or []
+        report.pages_image_mixed = len(mixed)
+        if mixed:
+            pages = bounded_list([p + 1 for p in mixed])
+            report.truncate(
+                f"image_content_pages={len(mixed)} (pages {pages}): "
+                "substantial images have unread content; route these pages to OCR"
+            )
+        replacements = stats.get("pages_with_replacement_chars") or {}
+        report.pages_unreadable_text = len(replacements)
+        if replacements:
+            report.truncate(
+                f"unreadable_text_pages={len(replacements)} "
+                f"(pages {bounded_list([p + 1 for p in replacements])}): "
+                f"replacement_chars={stats.get('replacement_chars', 0)}; route to OCR"
+            )
+        unresolved = stats.get("tables_without_headers", 0)
+        if unresolved:
+            report.notes.append(
+                f"tables_without_headers={unresolved} "
+                "(PDF rows retain data without inferred header labels)"
+            )
 
 
 def _ooxml_blocks(src: Source, kind: str, report: Diagnostics) -> Iterator[Block]:
@@ -237,7 +260,6 @@ def _ooxml_blocks(src: Source, kind: str, report: Diagnostics) -> Iterator[Block
             # Counted here rather than in the reader so that `chars` means the same
             # thing for every format: characters that reached the caller. It read
             # 0 for docx and pptx until `diceo file.docx --count` printed it.
-            report.chars += len(item.text)
             yield Block(
                 kind=item.kind,
                 text=item.text,
@@ -289,6 +311,11 @@ def _ooxml_blocks(src: Source, kind: str, report: Diagnostics) -> Iterator[Block
         if stats.comments:
             report.notes.append(
                 f"comments={stats.comments} (review comments in word/comments.xml, not indexed)"
+            )
+        if stats.unresolved_list_markers:
+            report.truncate(
+                f"unresolved_list_markers={stats.unresolved_list_markers} "
+                "(authored numbering could not be represented; item text is retained)"
             )
         if stats.moved_runs_skipped:
             report.notes.append(
@@ -350,10 +377,11 @@ def _text_blocks(src: Source, report: Diagnostics) -> Iterator[Block]:
 
 
 def _html_blocks(src: Source, report: Diagnostics) -> Iterator[Block]:
-    from diceo.plaintext import iter_html_blocks
+    from diceo.plaintext import _canonical_encoding, iter_html_blocks
 
     src.handle.seek(0)
-    yield from iter_html_blocks(src.handle, report)
+    encoding = _canonical_encoding(src.encoding) if src.encoding else None
+    yield from iter_html_blocks(src.handle, report, encoding=encoding)
 
 
 def _email_blocks(src: Source, report: Diagnostics) -> Iterator[Block]:
@@ -386,7 +414,9 @@ def _no_block_form(kind: str, source: str) -> UnsupportedFormat:
     )
 
 
-def _open(source: Readable, name: str, report: Diagnostics) -> tuple[ExitStack, Source, str]:
+def _open(
+    source: Readable, name: str, report: Diagnostics, limits: Limits
+) -> tuple[ExitStack, Source, str]:
     """Everything decidable before a byte of *content* is read, done eagerly.
 
     :func:`chunk` and :func:`extract` return generators, so without this the whole
@@ -416,10 +446,31 @@ def _open(source: Readable, name: str, report: Diagnostics) -> tuple[ExitStack, 
     """
     stack = ExitStack()
     try:
-        src = stack.enter_context(open_source(source))
+        src = stack.enter_context(
+            open_source(
+                source,
+                download_timeout=limits.download_timeout,
+                max_download_bytes=limits.max_download_bytes,
+            )
+        )
         if name:
             src.name = name
         kind = detect(src)
+        if kind == "html" and src.encoding:
+            head = src.handle.read(4)
+            src.handle.seek(0)
+            if head.startswith((b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff")):
+                # HTML's BOM precedes the transport charset, which precedes meta.
+                src.encoding = None
+            else:
+                from diceo.plaintext import _canonical_encoding
+
+                try:
+                    b"\0".decode(_canonical_encoding(src.encoding), errors="replace")
+                except LookupError as exc:
+                    raise CorruptDocument(
+                        "HTTP charset is not a text encoding", source=src.url
+                    ) from exc
     except BaseException:
         stack.close()
         raise
@@ -497,7 +548,7 @@ def extract(
     """
     limits = limits or Limits()
     report = diagnostics if diagnostics is not None else Diagnostics()
-    stack, src, kind = _open(source, name, report)
+    stack, src, kind = _open(source, name, report, limits)
     if kind in _TABULAR:
         stack.close()
         raise _no_block_form(kind, src.name)
@@ -523,11 +574,13 @@ def _budgeted(stream: Iterator[Block], limits: Limits, report: Diagnostics) -> I
         deadline = monotonic() + limits.max_seconds
     seen = 0
     for block in stream:
-        yield block
-        seen += len(block.text)
+        # Checked when the *next* block arrives, so a document that fits exactly is
+        # not reported as truncated -- `lost_data` for nothing lost.
         if limits.max_chars is not None and seen >= limits.max_chars:
             report.truncate(f"max_chars={limits.max_chars}")
             return
+        yield block
+        seen += len(block.text)
         if deadline is not None and monotonic() > deadline:
             report.truncate(f"max_seconds={limits.max_seconds}")
             return
@@ -537,7 +590,14 @@ def _extract_stream(
     stack: ExitStack, src: Source, kind: str, limits: Limits, report: Diagnostics
 ) -> Iterator[Block]:
     with stack:
-        yield from _budgeted(_blocks(src, kind, limits, report), limits, report)
+        chars = 0
+        try:
+            for block in _budgeted(_blocks(src, kind, limits, report), limits, report):
+                chars += len(block.text)
+                report.chars = chars
+                yield block
+        finally:
+            report.chars = chars
 
 
 def _sheet_chunks(
@@ -591,23 +651,27 @@ def _sheet_chunks(
             diagnostics=stats,
             rows=rows,
         ):
+            # Before the chunk, not after: only a chunk that is really withheld
+            # makes this a truncation.
+            if limits.max_chars is not None and produced_chars >= limits.max_chars:
+                report.truncate(f"max_chars={limits.max_chars}")
+                break
+            index += 1
+            produced_chars += len(item.text)
+            report.chunks = index
+            report.chars = produced_chars
             yield Chunk(
                 text=item.text,
-                index=index,
+                index=index - 1,
                 doc_id=doc_id or src.doc_id,
                 title=item.sheet,
                 kinds=("sheet_summary",) if item.kind == "sheet_summary" else ("sheet_row",),
                 locator=Locator(sheet=item.sheet, row=item.first_row),
                 extra=extra,
             )
-            index += 1
-            produced_chars += len(item.text)
             # The sheet path does not go through `chunk_blocks`, which is where
             # `max_chars` was enforced, so a spreadsheet ignored it entirely: 50,000
             # asked for, 6,199,081 delivered, `truncated` empty.
-            if limits.max_chars is not None and produced_chars >= limits.max_chars:
-                report.truncate(f"max_chars={limits.max_chars}")
-                break
             if deadline is not None and monotonic() > deadline:
                 report.truncate(f"max_seconds={limits.max_seconds}")
                 break
@@ -687,6 +751,38 @@ def _sheet_chunks(
             )
 
 
+def to_text(blocks: Iterable[Block]) -> Iterator[str]:
+    """Render blocks as near-markdown text, one piece per block, for a text chunker.
+
+    >>> from diceo import extract, to_text
+    >>> text = "".join(to_text(extract("report.pdf")))   # doctest: +SKIP
+
+    Headings get ``#`` by level, because a block's level is a field and a plain join
+    loses it. Everything else already carries its own markup -- ``- `` and ``1. `` on
+    list items, `` | `` between table cells -- so it passes through as it is. Lazy:
+    ``"".join`` is the caller's choice, not ours. Costs ~0.7% on top of `extract`.
+
+    Blocks are separated by a blank line, except consecutive table rows: a table is
+    one unit, and a blank line between its rows would split it for any chunker.
+    """
+    previous = ""
+    for block in blocks:
+        text = block.text
+        if block.is_heading:
+            text = f"{'#' * min(max(block.level, 1), 6)} {text}"
+        if previous:
+            gap = (
+                "\n"
+                if previous == block.kind == "table_row" and block.locator.row != 0
+                else "\n\n"
+            )
+            text = gap + text
+        previous = block.kind
+        yield text
+    if previous:
+        yield "\n"
+
+
 def chunk(
     source: Readable,
     *,
@@ -749,7 +845,7 @@ def chunk(
     """
     limits = limits or Limits()
     report = diagnostics if diagnostics is not None else Diagnostics()
-    stack, src, kind = _open(source, name, report)
+    stack, src, kind = _open(source, name, report, limits)
     return _chunk_stream(stack, src, kind, limits, report, doc_id, meta)
 
 
@@ -763,16 +859,25 @@ def _chunk_stream(
     meta: Mapping[str, object] | None,
 ) -> Iterator[Chunk]:
     with stack:
+        if src.url:
+            meta = {"source_url": src.url, **(meta or {})}
         if kind in _TABULAR:
             yield from _sheet_chunks(src, kind, limits, report, doc_id, meta)
             return
-        yield from chunk_blocks(
-            _reader_stream(src, kind, limits, report),
-            doc_id=doc_id or src.doc_id,
-            limits=limits,
-            diagnostics=report,
-            extra=meta,
-        )
+        chars = 0
+        try:
+            for item in chunk_blocks(
+                _reader_stream(src, kind, limits, report),
+                doc_id=doc_id or src.doc_id,
+                limits=limits,
+                diagnostics=report,
+                extra=meta,
+            ):
+                chars = item.char_end
+                report.chars = chars
+                yield item
+        finally:
+            report.chars = chars
 
 
-__all__ = ["chunk", "extract", "sniff"]
+__all__ = ["chunk", "extract", "sniff", "to_text"]

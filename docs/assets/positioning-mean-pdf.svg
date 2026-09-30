@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 580" width="940" height="580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" role="img" aria-label="Retrieval quality against throughput for 10 document extraction tools on synthetic held-out PDFs, each drawn at three chunk sizes. Throughput is on a logarithmic horizontal axis, so further right is faster and higher is better. Measured on 44 synthetic held-out PDFs · 776 queries, with every arm chunked by Diceo's splitter so the chunk-size aims mean the same thing on every line. Throughput for Docling, MarkItDown, PyMuPDF, PyMuPDF4LLM is quoted from the session that timed it rather than re-measured here; only their quality is new.">
-<style>@media (prefers-color-scheme: dark){.bg{fill:#0d1117}.t{fill:#e8e8e8}.d{fill:#9ca3af}.axis{stroke:#e8e8e8}.grid{stroke:#374151}.s-diceo{fill:#3bc9db;stroke:#3bc9db}.s-liteparse{fill:#9775fa;stroke:#9775fa}.s-extractous{fill:#f06595;stroke:#f06595}.s-xberg{fill:#69db7c;stroke:#69db7c}.s-unstructured{fill:#da77f2;stroke:#da77f2}.s-mineru{fill:#ffa94d;stroke:#ffa94d}.s-pymupdf{fill:#4dabf7;stroke:#4dabf7}.s-pymupdf4llm{fill:#ff8787;stroke:#ff8787}.s-markitdown{fill:#38d9a9;stroke:#38d9a9}.s-docling{fill:#a9e34b;stroke:#a9e34b}}</style>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 580" width="940" height="580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" role="img" aria-label="Retrieval quality against throughput for 6 document extraction tools on synthetic held-out PDFs, each drawn at three chunk sizes. Throughput is on a logarithmic horizontal axis, so further right is faster and higher is better. Measured on 44 synthetic held-out PDFs · 776 queries, with every arm chunked by Diceo's splitter so the chunk-size aims mean the same thing on every line. Throughput for Extractous, LiteParse, MinerU, Unstructured, Xberg is quoted from the session that timed it rather than re-measured here; only their quality is new.">
+<style>@media (prefers-color-scheme: dark){.bg{fill:#0d1117}.t{fill:#e8e8e8}.d{fill:#9ca3af}.axis{stroke:#e8e8e8}.grid{stroke:#374151}.s-diceo{fill:#3bc9db;stroke:#3bc9db}.s-liteparse{fill:#9775fa;stroke:#9775fa}.s-extractous{fill:#f06595;stroke:#f06595}.s-xberg{fill:#69db7c;stroke:#69db7c}.s-unstructured{fill:#da77f2;stroke:#da77f2}.s-mineru{fill:#ffa94d;stroke:#ffa94d}}</style>
 <rect class="bg" width="940" height="580" fill="#ffffff"/>
-<path class="grid" d="M 97.8 56.0 L 98.4 128.9 L 98.4 201.7 L 98.4 275.0 L 97.2 347.6 L 98.5 421.2 L 97.8 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
-<path class="grid" d="M 229.5 56.0 L 228.9 129.2 L 228.7 201.6 L 229.1 275.3 L 229.9 348.2 L 229.6 420.5 L 229.5 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
-<path class="grid" d="M 361.2 56.0 L 361.9 129.2 L 361.7 201.3 L 360.9 275.2 L 360.9 347.7 L 361.2 421.1 L 361.2 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
-<path class="grid" d="M 493.0 56.0 L 493.6 128.5 L 493.6 201.4 L 493.7 274.9 L 493.3 348.5 L 492.7 420.4 L 493.0 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
-<path class="grid" d="M 624.7 56.0 L 625.2 128.6 L 625.0 202.5 L 624.9 275.0 L 625.3 348.0 L 625.0 421.4 L 624.7 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 98.7 56.0 L 99.4 128.9 L 99.4 201.7 L 99.4 275.0 L 98.2 347.6 L 99.5 421.2 L 98.7 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 237.0 56.0 L 236.4 129.2 L 236.2 201.6 L 236.5 275.3 L 237.4 348.2 L 237.1 420.5 L 237.0 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 375.2 56.0 L 375.8 129.2 L 375.7 201.3 L 374.9 275.2 L 374.9 347.7 L 375.2 421.1 L 375.2 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 513.5 56.0 L 514.0 128.5 L 514.0 201.4 L 514.2 274.9 L 513.7 348.5 L 513.2 420.4 L 513.5 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
+<path class="grid" d="M 651.7 56.0 L 652.1 128.6 L 651.9 202.5 L 651.9 275.0 L 652.2 348.0 L 651.9 421.4 L 651.7 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
 <path class="grid" d="M 78.0 494.0 L 159.1 494.0 L 242.0 494.8 L 323.0 494.3 L 404.2 494.5 L 486.3 494.3 L 568.3 494.7 L 650.7 494.4 L 732.0 494.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
 <path class="grid" d="M 78.0 421.0 L 159.2 420.9 L 240.9 420.9 L 323.3 421.7 L 404.7 420.8 L 487.2 421.4 L 568.0 421.2 L 651.0 420.7 L 732.0 421.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
 <path class="grid" d="M 78.0 348.0 L 159.7 348.4 L 241.4 348.3 L 322.9 348.3 L 404.3 348.3 L 487.1 347.4 L 568.8 348.3 L 649.8 347.4 L 732.0 348.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
@@ -15,16 +15,16 @@
 <path class="grid" d="M 78.0 56.0 L 160.5 56.8 L 241.8 56.7 L 322.5 56.3 L 404.4 55.6 L 486.9 56.4 L 568.9 55.5 L 650.8 55.6 L 732.0 56.0" stroke="#e5e7eb" stroke-width="1.2" fill="none"/>
 <path class="axis" d="M 78.0 494.0 L 131.5 493.9 L 187.4 493.3 L 240.8 493.9 L 296.0 494.5 L 350.7 494.3 L 406.3 493.1 L 460.7 493.2 L 513.7 493.5 L 568.4 493.4 L 622.9 494.9 L 677.5 493.7 L 732.0 494.0" stroke="#1a1a1a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
 <path class="axis" d="M 78.0 56.0 L 77.7 93.4 L 78.8 128.1 L 79.2 166.1 L 77.6 202.1 L 77.5 239.7 L 78.4 274.0 L 79.0 311.2 L 78.6 348.8 L 77.4 383.5 L 77.4 420.6 L 78.5 457.5 L 78.0 494.0" stroke="#1a1a1a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-<path class="axis" d="M 97.8 494.0 L 97.5 496.6 L 98.1 499.2 L 97.8 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-<text x="97.8" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">0.01</text>
-<path class="axis" d="M 229.5 494.0 L 230.1 496.7 L 229.2 499.2 L 229.5 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-<text x="229.5" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">0.1</text>
-<path class="axis" d="M 361.2 494.0 L 361.3 495.8 L 360.7 498.5 L 361.2 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-<text x="361.2" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">1</text>
-<path class="axis" d="M 493.0 494.0 L 493.5 496.0 L 492.7 498.6 L 493.0 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-<text x="493.0" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">10</text>
-<path class="axis" d="M 624.7 494.0 L 625.3 496.1 L 624.7 498.5 L 624.7 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-<text x="624.7" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">100</text>
+<path class="axis" d="M 98.7 494.0 L 98.4 496.6 L 99.1 499.2 L 98.7 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="98.7" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">0.01</text>
+<path class="axis" d="M 237.0 494.0 L 237.5 496.7 L 236.7 499.2 L 237.0 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="237.0" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">0.1</text>
+<path class="axis" d="M 375.2 494.0 L 375.3 495.8 L 374.7 498.5 L 375.2 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="375.2" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">1</text>
+<path class="axis" d="M 513.5 494.0 L 513.9 496.0 L 513.1 498.6 L 513.5 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="513.5" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">10</text>
+<path class="axis" d="M 651.7 494.0 L 652.2 496.1 L 651.7 498.5 L 651.7 501.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="651.7" y="518" class="d" fill="#6b7280" font-size="14" text-anchor="middle">100</text>
 <path class="axis" d="M 71.0 494.0 L 73.6 494.0 L 75.1 493.5 L 78.0 494.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
 <text x="65" y="499.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.650</text>
 <path class="axis" d="M 71.0 421.0 L 73.2 421.1 L 75.1 420.8 L 78.0 421.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
@@ -39,36 +39,26 @@
 <text x="65" y="134.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.775</text>
 <path class="axis" d="M 71.0 56.0 L 72.9 56.5 L 75.5 55.8 L 78.0 56.0" stroke="#1a1a1a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
 <text x="65" y="61.0" class="d" fill="#6b7280" font-size="14" text-anchor="end">0.800</text>
-<path class="s-liteparse" d="M 559.7 283.5 L 559.7 285.5 L 558.6 287.2 L 557.2 289.1 L 554.9 289.0 L 552.8 288.6 L 551.5 286.9 L 550.4 285.4 L 549.3 283.5 L 549.2 281.2 L 550.5 279.1 L 552.5 277.9 L 554.9 277.6 L 556.9 278.8 L 558.9 279.5 L 560.6 281.2 L 560.1 283.5 Z" fill="#5f3dc4" fill-opacity="0.55" stroke="#5f3dc4" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
-<text x="566.9" y="305.5" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">LiteParse</text>
-<path class="s-extractous" d="M 529.8 370.1 L 530.4 372.2 L 528.4 373.4 L 527.4 375.6 L 525.1 375.3 L 523.0 375.2 L 521.0 374.2 L 520.5 372.0 L 520.1 370.1 L 520.1 368.0 L 520.9 365.9 L 523.2 365.5 L 525.1 363.6 L 527.2 365.0 L 528.5 366.7 L 530.7 367.7 L 531.3 370.1 Z" fill="#a61e4d" fill-opacity="0.55" stroke="#a61e4d" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
-<text x="537.1" y="375.1" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">Extractous</text>
-<path class="s-xberg" d="M 514.8 215.8 L 512.8 217.6 L 512.8 220.3 L 510.2 220.2 L 508.4 221.6 L 506.0 221.6 L 505.0 219.1 L 503.8 217.7 L 503.3 215.8 L 503.8 213.9 L 503.9 211.3 L 506.0 210.1 L 508.4 210.0 L 510.7 210.2 L 512.0 212.1 L 513.8 213.5 L 513.6 215.8 Z" fill="#2b8a3e" fill-opacity="0.55" stroke="#2b8a3e" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
-<text x="520.4" y="220.8" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">Xberg</text>
-<path class="s-unstructured" d="M 337.1 298.6 L 336.9 300.6 L 335.9 302.4 L 334.2 303.6 L 332.1 303.9 L 330.1 303.5 L 328.6 302.1 L 326.2 301.0 L 327.2 298.6 L 326.3 296.2 L 328.5 295.0 L 330.3 294.1 L 332.1 292.2 L 334.5 292.9 L 335.5 295.2 L 338.1 296.1 L 337.6 298.6 Z" fill="#862e9c" fill-opacity="0.55" stroke="#862e9c" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
-<text x="344.1" y="303.6" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">Unstructured</text>
-<path class="s-mineru" d="M 137.4 298.8 L 147.1 298.5 L 147.1 308.2 L 137.7 308.7 Z" fill="#e8590c" fill-opacity="0.55" stroke="#e8590c" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
-<text x="154.4" y="308.6" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">MinerU</text>
-<path class="s-pymupdf" d="M 603.0 271.6 L 609.8 283.2 L 596.8 283.4 Z" fill="#1864ab" fill-opacity="0.55" stroke="#1864ab" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85" stroke-dasharray="3.6 2.6"/>
-<text x="615.2" y="283.5" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">PyMuPDF</text>
-<path class="s-pymupdf4llm" d="M 187.1 160.0 L 193.9 171.7 L 180.5 171.8 Z" fill="#c92a2a" fill-opacity="0.55" stroke="#c92a2a" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85" stroke-dasharray="3.6 2.6"/>
-<text x="199.2" y="171.9" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">PyMuPDF4LLM</text>
-<path class="s-markitdown" d="M 369.4 279.8 L 368.8 281.7 L 368.1 283.8 L 366.0 284.5 L 364.0 285.0 L 361.8 285.3 L 359.6 284.2 L 359.1 281.8 L 358.6 279.8 L 358.4 277.4 L 360.2 275.9 L 361.7 274.2 L 364.0 274.6 L 366.3 274.2 L 368.2 275.6 L 368.9 277.7 L 369.8 279.8 Z" fill="#087f5b" fill-opacity="0.55" stroke="#087f5b" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
-<text x="376.0" y="284.8" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">MarkItDown</text>
-<path class="s-docling" d="M 143.3 219.6 L 143.1 222.0 L 141.0 223.4 L 139.1 224.3 L 137.1 225.1 L 134.9 225.1 L 133.4 223.3 L 132.7 221.4 L 131.7 219.6 L 132.4 217.6 L 132.7 215.1 L 135.2 215.0 L 137.1 213.8 L 139.3 214.4 L 141.7 215.0 L 141.6 217.7 L 142.5 219.6 Z" fill="#5c940d" fill-opacity="0.55" stroke="#5c940d" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
-<text x="149.1" y="224.6" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">Docling</text>
-<path class="s-diceo" d="M 585.5 148.1 L 584.9 150.6 L 583.9 153.3 L 581.8 155.7 L 578.7 155.4 L 575.5 155.7 L 573.2 153.5 L 571.3 151.1 L 571.2 148.1 L 572.2 145.4 L 572.8 142.2 L 576.0 141.7 L 578.7 139.7 L 581.2 141.9 L 583.9 142.9 L 585.1 145.4 L 587.1 148.1 Z" fill="#0b7285" fill-opacity="0.95" stroke="#0b7285" stroke-width="2.2" stroke-linejoin="round" stroke-opacity="1.0"/>
-<text x="590.7" y="153.1" class="t" fill="#1a1a1a" font-size="16.5" font-weight="700" text-anchor="start">Diceo</text>
+<path class="s-liteparse" d="M 583.2 279.8 L 583.2 281.8 L 582.1 283.4 L 580.7 285.4 L 578.4 285.2 L 576.3 284.9 L 575.0 283.1 L 573.9 281.6 L 572.8 279.8 L 572.7 277.4 L 574.0 275.3 L 576.1 274.2 L 578.4 273.8 L 580.4 275.0 L 582.5 275.7 L 584.1 277.4 L 583.6 279.8 Z" fill="#5f3dc4" fill-opacity="0.55" stroke="#5f3dc4" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<text x="590.4" y="284.8" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">LiteParse</text>
+<path class="s-extractous" d="M 551.9 365.1 L 552.4 367.2 L 550.5 368.4 L 549.4 370.6 L 547.2 370.2 L 545.0 370.2 L 543.0 369.2 L 542.6 367.0 L 542.1 365.1 L 542.2 363.0 L 542.9 360.8 L 545.2 360.5 L 547.2 358.6 L 549.3 360.0 L 550.5 361.7 L 552.8 362.7 L 553.3 365.1 Z" fill="#a61e4d" fill-opacity="0.55" stroke="#a61e4d" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<text x="559.2" y="370.1" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">Extractous</text>
+<path class="s-xberg" d="M 536.0 215.8 L 534.0 217.6 L 534.1 220.3 L 531.4 220.2 L 529.6 221.6 L 527.2 221.6 L 526.3 219.1 L 525.0 217.7 L 524.5 215.8 L 525.0 213.9 L 525.1 211.3 L 527.3 210.1 L 529.6 210.0 L 531.9 210.2 L 533.3 212.1 L 535.0 213.5 L 534.8 215.8 Z" fill="#2b8a3e" fill-opacity="0.55" stroke="#2b8a3e" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<text x="541.6" y="220.8" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">Xberg</text>
+<path class="s-unstructured" d="M 349.6 292.3 L 349.4 294.3 L 348.5 296.1 L 346.7 297.3 L 344.6 297.7 L 342.6 297.2 L 341.1 295.8 L 338.7 294.7 L 339.7 292.3 L 338.8 289.9 L 341.1 288.7 L 342.8 287.9 L 344.6 286.0 L 347.0 286.6 L 348.0 288.9 L 350.6 289.8 L 350.1 292.3 Z" fill="#862e9c" fill-opacity="0.55" stroke="#862e9c" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<text x="356.6" y="297.3" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">Unstructured</text>
+<path class="s-mineru" d="M 140.6 301.3 L 150.3 301.0 L 150.3 310.7 L 140.9 311.2 Z" fill="#e8590c" fill-opacity="0.55" stroke="#e8590c" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.85"/>
+<text x="157.5" y="311.1" class="t" fill="#1a1a1a" font-size="16.5" font-weight="500" text-anchor="start">MinerU</text>
+<path class="s-diceo" d="M 610.3 153.1 L 609.9 155.8 L 608.3 158.2 L 606.1 160.1 L 603.2 161.6 L 600.1 160.5 L 597.9 158.4 L 596.5 155.9 L 595.4 153.1 L 596.0 150.1 L 597.7 147.5 L 600.1 145.6 L 603.2 145.7 L 605.9 146.5 L 608.6 147.6 L 609.7 150.4 L 610.4 153.1 Z" fill="#0b7285" fill-opacity="0.95" stroke="#0b7285" stroke-width="2.2" stroke-linejoin="round" stroke-opacity="1.0"/>
+<text x="615.2" y="158.1" class="t" fill="#1a1a1a" font-size="16.5" font-weight="700" text-anchor="start">Diceo</text>
 <text x="746" y="64" class="d" fill="#6b7280" font-size="11" font-weight="700" letter-spacing="0.6">LICENCE</text>
-<path class="d" d="M 761.2 81.0 L 761.1 83.1 L 759.7 84.7 L 758.2 86.4 L 756.0 87.2 L 753.7 86.5 L 751.9 85.1 L 750.1 83.5 L 749.6 81.0 L 751.1 79.0 L 752.5 77.5 L 754.1 76.4 L 756.0 74.8 L 758.4 75.3 L 759.8 77.2 L 761.3 78.8 L 762.4 81.0 Z" fill="#6b7280" fill-opacity="0.45" stroke="#6b7280" stroke-width="1.7" stroke-linejoin="round"/>
+<path class="d" d="M 762.0 81.0 L 761.8 83.4 L 759.8 84.8 L 758.1 86.1 L 756.0 87.1 L 753.9 86.0 L 751.7 85.3 L 751.2 83.0 L 750.0 81.0 L 750.5 78.7 L 752.2 77.2 L 753.8 75.7 L 756.0 74.8 L 758.5 75.0 L 759.8 77.2 L 760.7 79.0 L 761.6 81.0 Z" fill="#6b7280" fill-opacity="0.45" stroke="#6b7280" stroke-width="1.7" stroke-linejoin="round"/>
 <text x="776" y="86" class="t" fill="#1a1a1a" font-size="12.5">Apache-2.0, MIT</text>
-<path class="d" d="M 755.8 97.0 L 762.9 108.8 L 749.4 109.0 Z" fill="#6b7280" fill-opacity="0.45" stroke="#6b7280" stroke-width="1.7" stroke-linejoin="round"/>
-<text x="776" y="108" class="t" fill="#1a1a1a" font-size="12.5">AGPL</text>
-<path class="d" d="M 751.2 122.1 L 761.1 122.3 L 760.6 132.0 L 751.5 132.0 Z" fill="#6b7280" fill-opacity="0.45" stroke="#6b7280" stroke-width="1.7" stroke-linejoin="round"/>
-<text x="776" y="132" class="t" fill="#1a1a1a" font-size="12.5">Apache-2.0 + terms</text>
+<path class="d" d="M 751.3 99.0 L 760.6 99.1 L 760.7 109.2 L 750.9 108.9 Z" fill="#6b7280" fill-opacity="0.45" stroke="#6b7280" stroke-width="1.7" stroke-linejoin="round"/>
+<text x="776" y="108" class="t" fill="#1a1a1a" font-size="12.5">Apache-2.0 + terms</text>
 <text x="405" y="536" class="t" fill="#1a1a1a" font-size="16" font-weight="600" text-anchor="middle">Throughput [doc/s/cpu]</text>
 <text x="24" y="275" class="t" fill="#1a1a1a" font-size="16" font-weight="600" text-anchor="middle" transform="rotate(-90 24 275)">Retrieval Quality</text>
-<path class="d" d="M 654.0 48.0 L 672.2 41.7 L 690.1 36.3 L 708.0 30.0" stroke="#6b7280" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+<path class="d" d="M 654.0 48.0 L 672.0 42.4 L 689.6 35.9 L 708.0 30.0" stroke="#6b7280" stroke-width="1.7" fill="none" stroke-linecap="round"/>
 <path class="d" d="M 708.0 30.0 L 697.8 31.4 M 708.0 30.0 L 700.4 36.9" stroke="#6b7280" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="647" y="52" class="d" fill="#6b7280" font-size="12.5" font-style="italic" text-anchor="end">better</text>
 </svg>
