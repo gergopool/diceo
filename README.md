@@ -14,17 +14,13 @@ shaped for retrieval rather than a wall of text.
 
 ![Diceo 0.1.1 and five comparison tools: mean PDF retrieval quality versus CPU cost.](https://raw.githubusercontent.com/gergopool/diceo/main/docs/assets/positioning-mean-pdf.svg)
 
-*In-house PDF evaluation: 44 held-out documents, 776 queries; mean answer-chunk recall in the
-top five at 600, 1,800 and 4,000 characters. Quality rechecked with one pinned Nemotron runtime
-on 2026-09-30; Diceo CPU remeasured, rival CPU costs carried from the earlier measured sitting.
-Four older tools lack cached text for this refresh and retain their historical results on
-[the benchmarks page](https://github.com/gergopool/diceo/blob/main/docs/benchmarks.md).
-[Methodology](https://github.com/gergopool/diceo/blob/main/docs/methodology.md).*
+*44 held-out PDFs, 776 queries, three chunk sizes. Updated 2026-09-30; comparison CPU costs
+are carried measurements. [Full results](https://github.com/gergopool/diceo/blob/main/docs/benchmarks.md)
+· [Methodology](https://github.com/gergopool/diceo/blob/main/docs/methodology.md).*
 
-- 🔥 **Fast extraction, content-aware chunks** — measured across chunk sizes and formats,
-  with original-document checks and the cases where we lose included in the benchmarks.
-- 🌊 **PDF, DOCX, XLSX, CSV and text stream** — chunks come out while the file is being read.
-  Legacy XLS/XLSB/ODS readers materialize native data; their memory use depends on the workbook.
+- 🔥 **Near the top on speed and retrieval** — content-aware chunks, without model inference.
+- 🌊 **PDF, DOCX, XLSX, CSV and text stream** — chunks arrive as the file is read, with bounded
+  PDF windows and incremental table packing.
 - 🪶 **11 MB installed, two dependencies, 20 ms to import.** No GPU, model download or server.
   It runs in your own process; URL fetching happens only when you pass a URL.
 - 📚 **Eleven formats, one call, free for commercial use** — pdf, docx, xlsx, pptx, xls, xlsb, ods,
@@ -34,9 +30,8 @@ Four older tools lack cached text for this refresh and retain their historical r
 
 ![One document goes into diceo.chunk() and chunks stream out.](https://raw.githubusercontent.com/gergopool/diceo/main/docs/assets/how-it-works.webp)
 
-Readers yield blocks directly to the chunker, without an intermediate markdown document or a
-document object. Local files are read directly. URL downloads are made seekable before extraction;
-large responses spill to a temporary file rather than filling memory.
+Readers yield blocks straight to the chunker, without an intermediate markdown document or
+document object. URL downloads spill to disk as needed before extraction.
 
 ## 📦 Install
 
@@ -63,8 +58,8 @@ Costs were flat.
 
 That is the whole product: `embed_text` goes to your embedding model, `meta` to your vector store.
 `chunk()` is a generator — a 1,000-page report starts yielding immediately and never exists in
-memory whole. It takes an HTTP(S) URL, a path, bytes, or any seekable binary file, and detects the format from
-content:
+memory whole. It takes an HTTP(S) URL, a path, bytes, or a seekable binary file, and detects
+the format from content:
 
 ```python
 diceo.chunk("report.pdf")                          # a path
@@ -72,10 +67,8 @@ diceo.chunk(response.content, name="report.pdf")   # bytes
 diceo.chunk("https://dlmf.nist.gov/1.11")           # URL → clean HTML retrieval chunks
 ```
 
-URLs use the same readers and return `source_url` in chunk metadata. HTTP charset and redirects
-are honored. Downloads default to a 30-second socket timeout and 128 MiB body limit; tune them
-with `Limits(download_timeout=..., max_download_bytes=...)`. `extract(url)` and `sniff(url)`
-work too. JavaScript is not executed.
+URLs use the same readers and include `source_url` in metadata. Downloads are bounded by
+`Limits(download_timeout=..., max_download_bytes=...)`; JavaScript is not executed.
 
 There is a CLI too:
 
