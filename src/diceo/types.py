@@ -388,12 +388,6 @@ class Diagnostics:
     The distinction from `pages_without_text` is the whole point -- a blank
     separator page is fine, a scanned page is a document missing from the index."""
 
-    pages_image_mixed: int = 0
-    """Pages with substantial unread image content alongside their text layer."""
-
-    pages_unreadable_text: int = 0
-    """Pages whose text mapping yielded Unicode replacement characters."""
-
     chars: int = 0
     """Characters that reached the caller. The same thing for every format, which is
     why it is worth comparing against the file's size when a document looks thin."""
@@ -428,6 +422,12 @@ class Diagnostics:
     disagreed with the content, charts whose numbers live in a part diceo does not
     open. Human-readable, one per observation, and worth logging on an unfamiliar
     corpus."""
+
+    pages_image_mixed: int = 0
+    """Pages with substantial unread image content alongside their text layer."""
+
+    pages_unreadable_text: int = 0
+    """Pages whose text mapping yielded Unicode replacement characters."""
 
     def truncate(self, what: str) -> None:
         """Record a cause of lost data, ignoring a repeat of one already recorded.

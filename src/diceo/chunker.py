@@ -96,6 +96,7 @@ class _Packer:
         extra: Mapping[str, object] | None = None,
     ):
         self.doc_id = doc_id
+        self.diagnostics = diagnostics
         self.extra = extra
         self.target = limits.target_chars
         self.table_target = limits.resolved_table_chars()

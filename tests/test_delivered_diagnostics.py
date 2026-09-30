@@ -1,6 +1,13 @@
 """Counters describe delivered content, including capped and explicitly closed iterators."""
 
 import diceo
+
+
+def test_additive_counters_preserve_positional_diagnostics():
+    report = diceo.Diagnostics("pdf", 1, 0, 0, 42)
+    assert report.chars == 42
+    assert report.pages_image_mixed == report.pages_unreadable_text == 0
+    assert not report.needs_ocr
 from diceo import Block, Diagnostics, Limits, Locator, chunk_blocks
 
 
