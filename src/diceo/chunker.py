@@ -46,7 +46,11 @@ def _split_long(text: str, target: int) -> list[str]:
     """
     if len(text) <= target:
         return [text]
-    pieces: list[str] = []
+    return list(_iter_split_long(text, target))
+
+
+def _iter_split_long(text: str, target: int) -> Iterator[str]:
+    """The same cuts, consumed lazily when one source cell is enormous."""
     floor = max(target // 4, 1)
     start = 0
     end = len(text)
@@ -73,13 +77,12 @@ def _split_long(text: str, target: int) -> list[str]:
         cut = max(cut, 0)
         piece = text[start : start + cut + 1].strip()
         if piece:
-            pieces.append(piece)
+            yield piece
         start += cut + 1
         while start < end and text[start].isspace():  # what `.lstrip()` did
             start += 1
     if start < end:
-        pieces.append(text[start:end])
-    return pieces
+        yield text[start:end]
 
 
 class _Packer:
@@ -197,9 +200,15 @@ class _Packer:
             self._append_group(header, self.table, self.table_caption)
             self.table = []
             self.table_chars = 0
+        elif self.table_budget:
+            # An oversized final row has already yielded all its pieces.
+            return
         else:
             # Wait for a second row before interpreting the first as a header:
             # repeating a single detected row would duplicate its data.
+            if len(header.text) > self.table_target:
+                yield from self._split_table_row(header._replace(text=""), header)
+                return
             if self.pending and self.size + len(header.text) > self.target:
                 yield from self._flush_carrying_headings()
             self._hold(header)
@@ -272,6 +281,62 @@ class _Packer:
             )
         )
 
+    def _split_table_row(
+        self, header: Block, row: Block, caption: str | None = None
+    ) -> Iterator[Chunk]:
+        """Split one oversized source row without moving values between columns."""
+        yield from self._flush_carrying_headings()
+        prefix = f"{caption}\n{header.text}" if caption else header.text
+        target = min(self.target, self.table_target)
+        room = target - len(prefix) - (1 if prefix else 0)
+        room -= self.pending_chars + len(self.pending)
+        separator = next(
+            (sep for sep in _CELL_SEPARATORS if sep in header.text and sep in row.text),
+            "",
+        )
+        cells = row.text.split(separator) if separator else [row.text]
+        if separator:
+            columns = header.text.count(separator) + 1
+            if separator == " | ":
+                # The ordinary row path strips the spaces around empty edge cells.
+                columns += header.text.startswith("| ") + header.text.endswith(" |")
+            if len(cells) > columns:
+                separator, cells = "", [row.text]
+            else:
+                cells.extend([""] * (columns - len(cells)))
+        # Repeat short row identifiers/context, and leave other long cells empty:
+        # every continuation still occupies its original column under the full labels.
+        available = room - len(separator) * (len(cells) - 1)
+        # ponytail: full labels/column positions can exhaust the target themselves.
+        # Keep them; column projection needs retrieval evidence before cutting context.
+        if available < 1:
+            note = "table_context_over_target (full labels/columns retained in split rows)"
+            if note not in self.diagnostics.notes:
+                self.diagnostics.notes.append(note)
+            if all(len(cell) <= self.table_target for cell in cells):
+                # Splitting short cells cannot fit this authored grid or reduce its labels.
+                self._hold(row._replace(text=f"{prefix}\n{row.text}" if prefix else row.text))
+                yield from self.flush()
+                return
+            available = target
+        context = [cell if len(cell) <= available // 4 else "" for cell in cells]
+        if sum(map(len, context)) >= available:
+            context = [cells[0] if len(cells[0]) < available // 2 else ""] + [""] * (
+                len(cells) - 1
+            )
+        budget = max(1, available - sum(map(len, context)))
+        for index, cell in enumerate(cells):
+            if not cell or context[index]:
+                continue
+            for piece in _iter_split_long(cell, budget):
+                parts = context.copy()
+                parts[index] = piece
+                body = separator.join(parts) if separator else piece
+                self._hold(row._replace(text=f"{prefix}\n{body}" if prefix else body))
+                yield from self.flush()
+        # Many short cells can collectively exceed the target. The context above
+        # then keeps only the first cell, so every other value enters the loop.
+
     def close_list_run(self) -> Iterator[Chunk]:
         """Emit buffered list items in groups of at most ``list_group``.
 
@@ -319,13 +384,17 @@ class _Packer:
             header = self.table_header
             if header is None:
                 self.table_header = block._replace(text=row_text)
+                self.table_budget = 0
                 return
-            if not self.table:
+            if not self.table_budget:
                 # PDF row zero is a recovered header. An unresolved first DATA
                 # row belongs in the group once, without becoming a repeated label.
                 if header.locator.page >= 0 and header.locator.row < 0:
-                    self.table = [header.text]
-                    self.table_chars = len(header.text)
+                    if len(header.text) > self.table_target:
+                        yield from self._split_table_row(header._replace(text=""), header)
+                    else:
+                        self.table = [header.text]
+                        self.table_chars = len(header.text)
                     header = header._replace(text="")
                     self.table_header = header
                 self.table_one_row = _wants_one_row_per_group(header.text, self.table_target)
@@ -335,6 +404,13 @@ class _Packer:
                     len(self.table_caption) + 1 if self.table_caption else 0
                 )
                 self.table_budget = max(self.table_target - overhead - 1, len(header.text))
+            if len(row_text) > self.table_target:
+                if self.table:
+                    self._append_group(header, self.table, self.table_caption)
+                    self.table = []
+                    self.table_chars = 0
+                yield from self._split_table_row(header, block, self.table_caption)
+                return
             if self.table and (
                 self.table_one_row or self.table_chars + len(row_text) > self.table_budget
             ):
