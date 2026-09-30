@@ -14,6 +14,16 @@ from diceo.__main__ import main
 def site():
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
+            if self.path.startswith("/download.php"):
+                body = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\0" * 504
+                self.send_response(200)
+                self.send_header("Content-Type", "application/vnd.ms-excel")
+                if "filename" in self.path:
+                    self.send_header("Content-Disposition", 'attachment; filename="report.xls"')
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path == "/redirect":
                 self.send_response(302)
                 self.send_header("Location", "/page.php")
@@ -58,6 +68,19 @@ def site():
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+@pytest.mark.parametrize("query", ["?filename=1", "?year=2018"])
+def test_url_format_hints_override_an_endpoint_suffix(site, query):
+    assert diceo.sniff(site + "/download.php" + query) == "xls"
+
+
+def test_url_options_preserve_positional_limits():
+    limits = diceo.Limits(1800, None, 0, 0, None, None, None, None, 0, False, False)
+    assert limits.reopen_every == 0
+    assert limits.detect_tables is False
+    assert limits.suppress_furniture is False
+    assert limits.download_timeout == 30.0
 
 
 @pytest.mark.parametrize("path", ["/page.php", "/redirect", "/gzip", "/bom"])

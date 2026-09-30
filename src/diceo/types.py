@@ -264,12 +264,6 @@ class Limits:
     document is the 2,400-page one. Without it the only options are a timeout that
     kills the worker (losing the chunks already produced) or no bound at all."""
 
-    download_timeout: float = 30.0
-    """Socket timeout in seconds for explicitly supplied HTTP(S) URLs."""
-
-    max_download_bytes: int = 128 * 1024**2
-    """Maximum downloaded/decompressed URL body size; local files are unaffected."""
-
     reopen_every: int = 100
     """Pages between closing and reopening a PDF. PDFium caches every parsed
     indirect object for the document's lifetime with no public purge, so without this
@@ -300,6 +294,12 @@ class Limits:
     plus title -- on chunks that otherwise carry none, so deleting it removes context that
     was accidentally useful. Making this the default needs that context supplied
     deliberately instead."""
+
+    download_timeout: float = 30.0
+    """Socket timeout in seconds for explicitly supplied HTTP(S) URLs."""
+
+    max_download_bytes: int = 128 * 1024**2
+    """Maximum downloaded/decompressed URL body size; local files are unaffected."""
 
     #: Below this a chunk cannot hold a word, and the splitter cannot make progress.
     #: Not a taste judgement -- 8 is already useless for retrieval -- but the point at

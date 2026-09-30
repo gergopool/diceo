@@ -997,6 +997,7 @@ class _HtmlBlocks(HTMLParser):
                     self._span,
                     self._rowspan,
                     self._fragments,
+                    self._first_row,
                 )
             )
             self._cells = []
@@ -1334,6 +1335,7 @@ class _HtmlBlocks(HTMLParser):
                     self._span,
                     self._rowspan,
                     self._fragments,
+                    self._first_row,
                 ) = self._frames.pop()
                 if self._in_cell and self._text:
                     # A table is block-level, so the text either side of it is not one

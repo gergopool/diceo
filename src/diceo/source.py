@@ -548,7 +548,13 @@ def _url_source(url: str, timeout: float, max_bytes: int) -> Iterator[Source]:
             raise DocumentNotFound(f"cannot download ({exc})", source=url) from exc
         handle.seek(0)
         name = Path(urllib.parse.unquote(urllib.parse.urlsplit(final_url).path)).name
-        if filename and (not name or not Path(name).suffix):
+        known_suffixes = (
+            _TEXT_SUFFIXES
+            | _HTML_SUFFIXES
+            | _CONTAINER_SUFFIXES
+            | {".pdf", ".csv", ".tsv", ".eml", ".mht", ".mhtml"}
+        )
+        if filename and Path(name).suffix.lower() not in known_suffixes:
             name = filename.replace("\\", "/").rsplit("/", 1)[-1]
             name = "".join(c for c in name if ord(c) >= 32 and ord(c) != 127)
         if not name:
@@ -556,7 +562,7 @@ def _url_source(url: str, timeout: float, max_bytes: int) -> Iterator[Source]:
         if media in ("text/html", "application/xhtml+xml"):
             if Path(name).suffix.lower() not in (".html", ".htm", ".xhtml"):
                 name += ".html"
-        elif not Path(name).suffix:
+        elif Path(name).suffix.lower() not in known_suffixes:
             suffix = {
                 "text/html": ".html",
                 "application/xhtml+xml": ".html",
