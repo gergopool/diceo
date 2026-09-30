@@ -6,7 +6,7 @@ Notable changes, newest first. [Keep a Changelog](https://keepachangelog.com/),
 Entries headed `docmill` predate the rename. They are kept because the code they describe is
 the code this release ships.
 
-## 0.1.1 — Unreleased
+## 0.1.1 — 2026-09-30
 
 - Accept HTTP(S) URLs in the library and CLI, with bounded downloads and clean retrieval chunks.
 - Preserve HTML math/code, DOCX numbering, SmartArt text and table context; report unread content.
