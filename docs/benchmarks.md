@@ -6,6 +6,54 @@ than deleted — a benchmark history you cannot audit is marketing.
 The harness that produces these lives in the parent research repository, along with the full
 experiment record. This page is the outcome; that repository is the working.
 
+## 0.1.1 refresh — 2026-09-30
+
+The README hero now uses one pinned embedding checkpoint/runtime and freshly compatible
+vectors on the same 44 held-out PDFs / 776 queries at three chunk-size aims. Cached vectors
+from older runtimes are not mixed with newly encoded text. Diceo CPU is remeasured; comparison
+CPU costs remain explicitly carried measurements. Four older comparison tools whose cached
+texts are unavailable are omitted from this refresh; their historical tables below remain.
+
+| Tool | Mean `gold@5`, 600/1800/4000 | PDF docs/CPU-s |
+|---|---:|---:|
+| Diceo 0.1.1 | 0.767 | 43.50 |
+| Xberg | 0.745 | 13.09 |
+| LiteParse | 0.723 | 29.49 |
+| Unstructured | 0.719 | 0.601 |
+| MinerU | 0.714 | 0.0218 |
+| Extractous | 0.694 | 17.53 |
+
+**Change checks.** Relative to the frozen pre-update working tree, DOCX/PPTX/XLSX/HTML
+retrieval scores are unchanged at all three aims. PDF shifts are +0.26, −0.39 and −0.52
+percentage points; a strict universal PDF retrieval gain is not established. A separate
+36-real-document / 556-query check retains all hit, coverage and association results.
+
+**Cost checks.** The final integrated source is compared with the frozen pre-update tree
+and previous package commit over all 219 documents: six rounds, isolated processes,
+all arm-order permutations and quiet-load rejection. Aggregate CPU is **0.55% lower**
+(90% paired interval: 0.26–0.84% lower). Public XLSX is 2.73% lower; held-out XLSX 6.33%
+lower; XLSB 17.11% lower. CSV, email and ODS remain within measurement noise. Large ODS
+peak current-process memory is **146.75 → 133.01 MiB**; the earlier affected-format run
+measured 149.1 → 119.2 MiB. These are distinct measurements, not a universal memory ratio.
+
+Some added work costs more: public DOCX is 2.37% higher and PPTX 1.69% higher. The huge
+Ashford table is 6 ms slower while emitting more retrieval context; NASA's recovered
+SmartArt adds about 1.3 ms. Held-out PDF CPU is 0.50% higher, while public PDF is within
+noise. The aggregate improves, but no every-document zero-slowdown claim is made.
+
+**HTML comparison.** On twelve real public HTML documents, final Diceo chunking consumes
+1.1747 CPU seconds / 26.0 MiB peak current-process memory, compared with 4.724 CPU seconds
+for Trafilatura default TXT plus splitting: 4.02× faster on this sample. Twenty-seven
+selected substantive anchors and 114 selected authored math alternatives are retained.
+Trafilatura remains a benchmark tool, not a runtime dependency.
+
+**Provenance.** Research experiments 057–058; `scripts/bench057_improvements.py`, the paired
+retrieval harness and pinned checkpoint/cache namespace in `bench/embed.py`, public source
+hash manifest `bench/public/audit-056.jsonl`, and `scripts/plot057.py`. Original and candidate
+source snapshots, all accepted/rejected timing cells, raw rankings and chart inputs remain
+in the research record. The final source preserves held-out chunk text, so the consistent
+quality scores are reused without another model run. GPU use is confined to evaluation.
+
 **How to read this page.** Nothing below is an average across formats, because averaging across
 formats hides exactly the cases where a tool falls over. Losses are included. A benchmark table with
 no losses in it is read as marketing, and correctly discounted.
@@ -153,8 +201,8 @@ is the 29.49 row.
 **diceo's row is the only one with a replicate.** It was re-timed by the same harness later on
 2026-08-01 at **43.37** docs/CPU-second — 3.4% apart, the same order as the run-to-run spread a
 busy box produces, and the reason ratios derived from this table are quoted as ranges rather than
-to three figures. 44.88 is the published figure and the one the chart plots; the rivals were timed
-once, in the earlier of the two sessions.
+to three figures. 44.88 was the figure plotted for experiment 046; the rivals were timed once,
+in the earlier of the two sessions. The current 0.1.1 chart uses the refresh above.
 
 **Both MinerU rows exclude GPU time entirely.** They ran on an RTX 5070 Ti and `getrusage` cannot
 see any of it, so both figures are *generous* to MinerU, not harsh. `pipeline` also averages 2.63
@@ -416,75 +464,65 @@ collection and page-cache noise are one-sided, so a mean is a number no run prod
 
 | tool | pdf | docx | pptx | xlsx | cores | peak RSS |
 |---|---|---|---|---|---|---|
-| PyMuPDF *(AGPL)* | **72.99** | **44.28** | **64.96** | 0 chars | 1.0 | 57 MB |
-| **diceo** | 47.26 | 33.52 | 44.80 | **46.72** | **1.0** | **28 MB** |
-| MarkItDown | 1.44 | 3.75 | 10.21 | 1.46 | 1.4–3.6 | 197 MB |
-| PyMuPDF4LLM *(AGPL)* | 0.25 | 0.20 | 0.33 | 0 chars | 5.5–5.8 | 594 MB |
+| PyMuPDF *(AGPL)* | **68.63** | 41.15 | **64.41** | 0 chars | 1.0 | 55 MB |
+| **diceo** | 44.69 | **50.44** | 41.23 | **43.17** | **1.0** | **28 MB** |
+| MarkItDown | 1.44 | 3.78 | 10.14 | 1.46 | 1.4–3.6 | 196 MB |
+| PyMuPDF4LLM *(AGPL)* | 0.26 | 0.21 | 0.36 | 0 chars | 5.5–5.9 | 622 MB |
+| Docling | 0.076 | 1.12 | 4.50 | 3.76 | 1.0–3.8 | 4,351 MB |
 
 **Provenance.** `bench/speed_formats.py`, one child process per cell, over the same held-out corpora
-— `data/holdout-23` + `data/holdout-41`, 44 PDF, 24 DOCX, 16 PPTX, 16 XLSX. The diceo and
-MarkItDown rows, and MarkItDown's core range, are experiment 036 (ooxml throughput), re-measured on a
-quiet box; the PyMuPDF row is experiment 031 (throughput remeasured); the PyMuPDF4LLM row, its core
-range and the whole peak-RSS column are experiment 024 (speed by format), the last run that included
-PyMuPDF4LLM — it drives the box to load 9 on its own, which contaminates every cell scheduled after
-it, so it is now run alone. MarkItDown's peak RSS was published as ~~210 MB~~ and is corrected to
-**197 MB**: a transcription error, against a competitor, found by diffing the table against the JSON
-the run wrote (024).
+— `data/holdout-23` + `data/holdout-41`, 44 PDF, 24 DOCX, 16 PPTX, 16 XLSX — experiment 054
+(speed formats remeasured), 2026-08-19, all 20 cells in one sitting, zero process failures. The
+table is wall-clock documents per second; diceo uses 1.00 cores so wall and CPU-seconds agree.
+~~The previous table mixed three sittings: diceo and MarkItDown from 036, PyMuPDF from 031,
+PyMuPDF4LLM from 024.~~ MarkItDown's peak RSS was published as ~~210 MB~~ then ~~197 MB~~ and is
+**196 MB** on PDF here (285 MB on PPTX, the high-water mark of the sitting).
 
 **PyMuPDF is faster than us at flat text and we are not going to pretend otherwise.** It returns
 text with no headings, no table structure and no diagnostics; against its *structured* output the
 two are level. Recovering structure is worth +8.0pp of retrieval, measured, and that is the trade.
 
-**Wall clock is not what you pay.** PyMuPDF4LLM took 174 seconds of wall time on those 44 PDFs and
-**952 CPU-seconds**, because it quietly averages 5.5 cores. On an idle laptop that flatters it; an
+**Wall clock is not what you pay.** PyMuPDF4LLM took 167 seconds of wall time on those 44 PDFs and
+**923 CPU-seconds**, because it quietly averages 5.53 cores. On an idle laptop that flatters it; an
 indexing pipeline runs one worker per document on a box that is already busy, and there what you pay
-is CPU. Per CPU-second it processed ~~879×~~ **roughly 1,030× fewer documents** than we did, in 21×
-the memory (594 MB against 28 MB).
-
-**Which run each side of that ratio comes from.** The 879× was a single-run figure: experiment 024
-(speed by format) measured both arms on the same 44 PDFs in the same session — us at **40.6**
-documents per CPU-second, PyMuPDF4LLM at **0.046**. Our side has since been re-measured twice and
-stands at **47.3** documents per CPU-second (experiment 036 (ooxml throughput), 47.26 doc/s at 1.00
-cores); PyMuPDF4LLM has not been re-run since 024, for the load-contamination reason above. So the
-current ratio is 47.3 ÷ 0.046 = 1,028, i.e. **≈1,030×** at the precision either cell supports —
-**arithmetic across two runs rather than one paired measurement**, which is why it is quoted as
-approximate rather than to three figures. `docs/assets/positioning.svg` plots those same two cells,
-so the chart and this page agree by construction.
+is CPU. Per CPU-second it processed **937× fewer documents** than we did, in 22× the memory
+(622 MB against 28 MB). Both sides of that ratio are experiment 054, same sitting —
+~~879×~~ from 024 and ~~≈1,030×~~ from dividing 036 by 024 are superseded. The historical
+`docs/assets/positioning.svg` plots those 054 cells; the current README hero uses the 0.1.1
+refresh above, which omits tools whose cached text was unavailable for consistent rescoring.
 
 **MarkItDown is measured on the same axis, and this is the ratio a batch caller pays.**
 Documents per CPU-second, ours over theirs, by format:
 
 | format | diceo : MarkItDown, per CPU-second |
 |---|---|
-| pdf | **45.0×** |
-| xlsx | **44.7×** |
-| docx | 17.6× |
-| pptx | 15.7× |
+| pdf | **42.6×** |
+| xlsx | **40.7×** |
+| docx | 26.5× |
+| pptx | 14.6× |
 
 Over the mixed corpus — all 100 documents, in the proportions the corpus itself has — it is
-**32.09×**: 2.35 CPU-seconds against 75.40. **The headline stays a mixed-corpus figure with
-that table beside it**, because the per-format spread runs from 15.7× to 45.0× and a reader who
+**33.95×**: 2.219 CPU-seconds against 75.331. **The headline stays a mixed-corpus figure with
+that table beside it**, because the per-format spread runs from 14.6× to 42.6× and a reader who
 took a single per-format number away from this page would be wrong about DOCX and PPTX — a
 stated-scope decision, recorded in experiment 031 (throughput remeasured) and again in 036.
 
-**Provenance.** `bench/speed_formats.py` again, one child process per cell, over the same
-held-out corpora — `data/holdout-23` + `data/holdout-41`, 44 PDF, 24 DOCX, 16 PPTX, 16 XLSX,
-100 documents in all — in experiment 036 (ooxml throughput). Both arms were measured in the
-same session on a quiet box, so unlike the PyMuPDF4LLM ratio above this one is a paired
-measurement rather than arithmetic across two runs. MarkItDown's core count per cell runs from
-1.37 on PDF to 3.60 on PPTX, and that is the whole difference between these ratios and the
+**Provenance.** The same 054 sitting as the wall-clock table above. Both arms were measured in
+the same session, so this is a paired measurement. MarkItDown's core count per cell runs from
+1.37 on PDF to 3.59 on PPTX, and that is the whole difference between these ratios and the
 wall-clock table above.
 
-Docling costs roughly **600× our wall clock per document** — 15.7 s against 0.025 s on one held-out
-PDF, warm, measured by `bench/run_formats.py` on `data/holdout-23` + `data/holdout-41` in experiment
-026 (docling) — and its default configuration downloads and initialises OCR models unasked. Its core
-count was never measured, so everywhere it is placed against a per-CPU-second axis it is credited
-with 1.0 cores, which is the most generous reading available to it.
+Docling costs **591× our wall clock per document** on the 44 held-out PDFs — 13.2 s against
+0.022 s, experiment 054, same sitting — and its default configuration downloads and initialises
+OCR models unasked. Per CPU-second it is **0.020 docs/CPU-s at 3.80 cores**, peak RSS **4.35 GB**.
+~~0.064 docs/CPU-s at assumed 1.0 cores~~ is withdrawn: that inverted 026's 15.7 s/document and
+credited it with a core count nobody had measured.
 
-Our PDF figure has been published twice before and both are superseded: ~~40.6~~, then ~~47.67~~
-after an optimisation, now **47.26** on a quiet box, which reproduces the previous run to within 1%
-on a path that was not touched. An interim **53.2 doc/s was withdrawn before publication** because it
-was arithmetic across two different corpora rather than a measurement.
+Our PDF figure has been published three times before and all are superseded: ~~40.6~~, then
+~~47.67~~, then ~~47.26~~, now **44.69** documents per CPU-second (experiment 054), which
+reproduces 046's same-session re-time of 44.88 to 0.4%. An interim **53.2 doc/s was withdrawn
+before publication** because it was arithmetic across two different corpora rather than a
+measurement.
 
 **Memory does not grow with document size.** Peak RSS is bounded by the reopen window, not by the
 page count — PDFium caches every indirect object it parses for the document's lifetime and offers no
@@ -620,5 +658,6 @@ declared licence.
   a commercial pipeline mostly sees.
 
 The claim we do make is narrower and, we think, the useful one: **near the top on both speed and
-retrieval quality at once, under a licence you can ship, in memory that does not grow, and it tells
-you what it could not read.** Each of those alone is solved by something. Together is the gap.
+retrieval quality at once, under a licence you can ship, with bounded PDF windows and incremental
+chunk packing, and it tells you what it could not read.** Legacy spreadsheet native allocation
+still depends on workbook size; large single rows also require memory proportional to that row.

@@ -6,6 +6,12 @@ Notable changes, newest first. [Keep a Changelog](https://keepachangelog.com/),
 Entries headed `docmill` predate the rename. They are kept because the code they describe is
 the code this release ships.
 
+## 0.1.1 — Unreleased
+
+- Accept HTTP(S) URLs in the library and CLI, with bounded downloads and clean retrieval chunks.
+- Preserve HTML math/code, DOCX numbering, SmartArt text and table context; report unread content.
+- Split huge cells, bound table memory, and correct CLI metadata and output counters.
+
 ## 0.1.0 — 2026-08-04
 
 First release as `diceo`. `pip install diceo`, `import diceo`, `diceo report.pdf`.

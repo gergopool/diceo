@@ -295,6 +295,12 @@ class Limits:
     was accidentally useful. Making this the default needs that context supplied
     deliberately instead."""
 
+    download_timeout: float = 30.0
+    """Socket timeout in seconds for explicitly supplied HTTP(S) URLs."""
+
+    max_download_bytes: int = 128 * 1024**2
+    """Maximum downloaded/decompressed URL body size; local files are unaffected."""
+
     #: Below this a chunk cannot hold a word, and the splitter cannot make progress.
     #: Not a taste judgement -- 8 is already useless for retrieval -- but the point at
     #: which the arithmetic stops working.
@@ -341,6 +347,10 @@ class Limits:
             raise ValueError(
                 f"max_seconds={self.max_seconds} must be positive; use None for no budget"
             )
+        if not 0 < self.download_timeout < float("inf"):
+            raise ValueError("download_timeout must be finite and positive")
+        if self.max_download_bytes <= 0:
+            raise ValueError("max_download_bytes must be positive")
 
     def resolved_table_chars(self) -> int:
         """The size aim to use for table row-groups, with the default filled in.
@@ -413,6 +423,12 @@ class Diagnostics:
     open. Human-readable, one per observation, and worth logging on an unfamiliar
     corpus."""
 
+    pages_image_mixed: int = 0
+    """Pages with substantial unread image content alongside their text layer."""
+
+    pages_unreadable_text: int = 0
+    """Pages whose text mapping yielded Unicode replacement characters."""
+
     def truncate(self, what: str) -> None:
         """Record a cause of lost data, ignoring a repeat of one already recorded.
 
@@ -440,7 +456,11 @@ class Diagnostics:
         by `pages_without_text` and by a note; this flag means *there is content
         we could not read*.
         """
-        return self.pages_image_only > 0
+        return (
+            self.pages_image_only > 0
+            or self.pages_image_mixed > 0
+            or self.pages_unreadable_text > 0
+        )
 
     def as_dict(self) -> dict:
         """Every counter plus the two verdicts, flat and JSON-serialisable.
@@ -455,6 +475,8 @@ class Diagnostics:
             "pages": self.pages,
             "pages_without_text": self.pages_without_text,
             "pages_image_only": self.pages_image_only,
+            "pages_image_mixed": self.pages_image_mixed,
+            "pages_unreadable_text": self.pages_unreadable_text,
             "sheets": self.sheets,
             "rows": self.rows,
             "chars": self.chars,

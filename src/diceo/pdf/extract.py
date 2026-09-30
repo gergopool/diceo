@@ -62,6 +62,7 @@ answerable.
 from __future__ import annotations
 
 import ctypes
+import math
 import re
 import threading
 from collections import Counter
@@ -183,7 +184,11 @@ _NUMERIC_FIELD = re.compile(r"^[-+(]?(?:\d[\d,]*(?:\.\d+)?%?|n/?a)[)]?$", re.IGN
 #: over the entire BMP in `tests/test_pdfium_probe.py` rather than over a token list.
 _NUMERIC_FIRST = frozenset("0123456789-+(nN")
 
-_CAPTION = re.compile(r"^\s*(?:table|figure|fig\.|listing|algorithm|chart|exhibit)\s*\d", re.I)
+_CAPTION = re.compile(
+    r"^\s*(?:table|figure|fig\.|listing|algorithm|chart|exhibit)\s*\d+(?:[.-]\d+)*"
+    r"(?:\s*[:.)]|\s*$)",
+    re.I,
+)
 _LIST_ITEM = re.compile(
     r"^\s*(?:[•‣◦⁃∙·▪●−–-]\s+"
     r"|\(?\d{1,3}[.)]\s+|[a-z][.)]\s+|[ivxlIVXL]{1,5}[.)]\s+)"
@@ -201,6 +206,7 @@ _HYPHEN_ARTEFACT = str.maketrans({"￾": "-", "\x02": "-"})
 #: path was never covered: measured, a text layer holding \x00, \x01 and \x1b handed all
 #: three to the caller. Searched before substituting, so a clean page pays one C-speed
 #: scan and nothing else.
+_TAU = 2 * math.pi
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 #: The characters `_HYPHEN_ARTEFACT` rewrites, derived from the table so the two
 #: cannot drift apart.
@@ -546,6 +552,7 @@ class Block:
     end: int  # one past the last
     bbox: tuple[float, float, float, float]
     level: int | None = None  # 1..6, headings only
+    row: int = -1  # 0: recovered table header; >0: data; -1: not established
 
     def __str__(self) -> str:
         if self.kind == "heading":
@@ -755,6 +762,7 @@ def page_lines(
     control_removed: list[int] | None = None,
     hyphen_counts: list[int] | None = None,
     reordered: list[int] | None = None,
+    replacement_chars: dict[int, int] | None = None,
 ) -> list[Line]:
     """All text lines on one page, in PDFium's reading order.
 
@@ -780,17 +788,30 @@ def page_lines(
         buffer = (ctypes.c_ushort * (n_chars + 1))()
         pdfium_c.FPDFText_GetText(textpage, 0, n_chars, buffer)
         text = bytes(memoryview(buffer).cast("B")[: n_chars * 2]).decode("utf-16-le", "replace")
+        if replacement_chars is not None:
+            replacements = text.count("\ufffd")
+            if replacements:
+                replacement_chars[index] = replacements
         rejoined = 0
         if _HYPHEN_MARKER.search(text):
             text, rejoined, kept = _resolve_hyphens(text)
             if hyphen_counts is not None:
                 hyphen_counts[0] += rejoined
                 hyphen_counts[1] += kept
+        # Non-BMP characters: PDFium indexes UTF-16 units, the decode above made each
+        # surrogate pair one character, and every probe after it landed one late.
+        # One character per unit keeps the indices; lines are re-paired below.
+        paired = len(text) != n_chars
+        if paired:
+            text = "".join(map(chr, buffer[:n_chars]))
+        marked = bool(rejoined)
         if _CONTROL_CHARS.search(text):
-            cleaned = _CONTROL_CHARS.sub("", text)
+            # Marked, not deleted: deleting shortened the page string and misaligned
+            # every font and box probe after it -- the reason `_JOIN_MARK` exists.
+            text, removed = _CONTROL_CHARS.subn(_JOIN_MARK, text)
             if control_removed is not None:
-                control_removed[0] += len(text) - len(cleaned)
-            text = cleaned
+                control_removed[0] += removed
+            marked = True
 
         out: list[Line] = []
         left, bottom, right, top = _c_double(), _c_double(), _c_double(), _c_double()
@@ -802,6 +823,8 @@ def page_lines(
         get_size = pdfium_c.FPDFText_GetFontSize
         get_weight = pdfium_c.FPDFText_GetFontWeight
         get_angle = pdfium_c.FPDFText_GetCharAngle
+
+        turn = pdfium_c.FPDFPage_GetRotation(page.raw) * (_TAU / 4) if want_angle else 0.0
 
         pos = 0
         limit = len(text)
@@ -815,8 +838,12 @@ def page_lines(
             # from the page string would misalign every probe after the first
             # hyphen. `Line.start`/`end` therefore stay a correct *locator* and stop
             # being a byte-exact slice -- which is what `Block` already documents.
-            if rejoined and _JOIN_MARK in body:
+            if marked and _JOIN_MARK in body:
                 body = body.replace(_JOIN_MARK, "")
+                # Probe real characters, never a mark: same length, so indices hold.
+                raw = raw.replace(_JOIN_MARK, " ")
+            if paired:
+                body = body.encode("utf-16-le", "surrogatepass").decode("utf-16-le", "replace")
             # `has_visible_text`, not just truthiness: a PDF line consisting only of
             # zero-width characters is invisible on the page and would otherwise
             # become a `Line`, then a block, then an indexed chunk of nothing.
@@ -840,12 +867,16 @@ def page_lines(
                     y1 = top.value
                 if y0 > bottom.value:
                     y0 = bottom.value
-                if (
-                    want_angle
-                    and size > 0
-                    and abs(get_angle(textpage, first)) > MAX_HEADING_ANGLE
-                ):
-                    size = -size  # negative size == rotated; never a heading
+                if want_angle and size > 0:
+                    # Rotated only if upright in *neither* frame. The angle is in page
+                    # space, so a pdflscape page -- `/Rotate 90`, text drawn sideways
+                    # to read upright -- measured 3pi/2 and lost every heading, while
+                    # a page rotated after typesetting is upright in page space.
+                    raw_angle = get_angle(textpage, first) % _TAU
+                    shown = (raw_angle + turn) % _TAU
+                    tilt = min(raw_angle, _TAU - raw_angle, shown, _TAU - shown)
+                    if tilt > MAX_HEADING_ANGLE:
+                        size = -size  # negative size == rotated; never a heading
                 out.append(
                     Line(
                         text=body,
@@ -969,6 +1000,55 @@ PDFIUM_LOCK = threading.RLock()
 IMAGE_PAGE_MAX_CHARS = 40
 
 
+def _has_image_gap(found: list[Line]) -> bool:
+    """Suspicious sparse layout, without probing objects on ordinary short pages."""
+    if any(
+        _CAPTION.match(line.text) and not line.text.lstrip().lower().startswith("table")
+        for line in found
+    ):
+        return True
+    ordered = sorted(found, key=_reading_order)
+    # An ordinary footer has a large gap above it; it is not missing image text.
+    return any(
+        upper.bbox[1] - lower.bbox[3] > max(72, 8 * max(upper.height, lower.height))
+        for upper, lower in zip(ordered[1:-2], ordered[2:-1], strict=True)
+    )
+
+
+def _page_has_unread_image(page: pdfium.PdfPage, found: list[Line]) -> bool:
+    """Large raster content without a corresponding text layer on a sparse page.
+
+    ponytail: inspect 64 direct objects on sparse pages; deeper/dense image discovery
+    needs a separately measured pass, rather than taxing every ordinary text page.
+    """
+    bounds = [ctypes.c_float() for _ in range(4)]
+    refs = [ctypes.byref(value) for value in bounds]
+    area = 0.0
+    for index in range(min(pdfium_c.FPDFPage_CountObjects(page.raw), 64)):
+        obj = pdfium_c.FPDFPage_GetObject(page.raw, index)
+        if pdfium_c.FPDFPageObj_GetType(obj) != pdfium_c.FPDF_PAGEOBJ_IMAGE:
+            continue
+        if not pdfium_c.FPDFPageObj_GetBounds(obj, *refs):
+            continue
+        left, bottom, right, top = (value.value for value in bounds)
+        if not area:
+            width, height = page.get_size()
+            area = width * height
+        if (right - left) * (top - bottom) < area * 0.08:
+            continue
+        covered = sum(
+            len(line.text)
+            for line in found
+            if line.bbox[0] < right
+            and line.bbox[2] > left
+            and line.bbox[1] < top
+            and line.bbox[3] > bottom
+        )
+        if covered <= IMAGE_PAGE_MAX_CHARS:
+            return True
+    return False
+
+
 def page_is_image(page: object) -> bool:
     """Does this page draw an image (or a form that contains one)?
 
@@ -1008,9 +1088,13 @@ def lines(
     want_angle: bool = True,
     reopen_every: int = REOPEN_EVERY,
     image_only: list[int] | None = None,
+    image_mixed: list[int] | None = None,
+    replacement_chars: dict[int, int] | None = None,
+    chars: list[int] | None = None,
     control_removed: list[int] | None = None,
     hyphen_counts: list[int] | None = None,
     reordered: list[int] | None = None,
+    page_count: list[int] | None = None,
 ) -> Iterator[list[Line]]:
     """Yield one list of ``Line`` per page, lazily, in bounded memory.
 
@@ -1022,7 +1106,12 @@ def lines(
     """
     with PDFIUM_LOCK:
         doc = pdfium.PdfDocument(path)
-        indices = page_range if page_range is not None else range(len(doc))
+        indices = range(len(doc))
+        if page_range is not None:
+            # Clipped to the document, so `range(max_pages)` is a safe cap.
+            indices = indices[page_range.start : page_range.stop : page_range.step]
+        if page_count is not None:
+            page_count[0] = len(doc)
     try:
         since_open = 0
         for i in indices:
@@ -1044,13 +1133,31 @@ def lines(
                         control_removed=control_removed,
                         hyphen_counts=hyphen_counts,
                         reordered=reordered,
+                        replacement_chars=replacement_chars,
                     )
+                    page_chars = (
+                        sum(len(line.text) for line in found)
+                        if chars is not None
+                        or image_only is not None
+                        or image_mixed is not None
+                        else 0
+                    )
+                    if chars is not None:
+                        chars[0] += page_chars
                     if (
                         image_only is not None
-                        and sum(len(line.text) for line in found) <= IMAGE_PAGE_MAX_CHARS
+                        and page_chars <= IMAGE_PAGE_MAX_CHARS
                         and page_is_image(page)
                     ):
                         image_only.append(i)
+                    elif (
+                        image_mixed is not None
+                        and IMAGE_PAGE_MAX_CHARS < page_chars <= 1000
+                        and len(found) <= 12
+                        and _has_image_gap(found)
+                        and _page_has_unread_image(page, found)
+                    ):
+                        image_mixed.append(i)
                 finally:
                     page.close()
             yield found
@@ -1133,14 +1240,20 @@ class _Paragraph:
         self.parts.append(line.text)
         self.end = line.end
 
-    def flush(self) -> Block | None:
+    def flush(self, *, row: int = -1) -> Block | None:
         if not self.parts:
             return None
         text = self.parts[0]
         for part in self.parts[1:]:
-            # De-hyphenate across the line break; PDFium leaves the hyphen in.
-            if text.endswith("-") and not text.endswith(("--", "- ")):
-                text = text[:-1] + part
+            # De-hyphenate across the line break; PDFium leaves the hyphen in. Not
+            # before a digit or a capital, nor after a digit: `2019-` + `2020` read
+            # `20192020`, `1-` + `stage` read `1stage`. Letter-spaced text still
+            # joins (`ρ -` + `ι`), as it always did.
+            if text.endswith("-") and not text.endswith("--"):
+                if part[:1].islower() and not text[-2:-1].isdigit():
+                    text = text[:-1] + part
+                else:
+                    text += part
             else:
                 text = f"{text} {part}"
         block = Block(
@@ -1150,12 +1263,13 @@ class _Paragraph:
             start=self.start,
             end=self.end,
             bbox=self.box,
+            row=row,
         )
         self.parts = []
         return block
 
 
-def _numeric_fields(text: str) -> int:
+def _numeric_fields(text: str, fields: list[str] | None = None) -> int:
     """How many whitespace-separated tokens look like a number.
 
     The guard is a pure speed filter over `_NUMERIC_FIELD` and must stay a superset
@@ -1165,7 +1279,7 @@ def _numeric_fields(text: str) -> int:
     `isdigit()`, which is there to cover the Unicode `Nd` digits `\\d` also matches.
     """
     total = 0
-    for token in text.split():
+    for token in text.split() if fields is None else fields:
         ch = token[0]
         if (ch in _NUMERIC_FIRST or (ch > "\x7f" and ch.isdigit())) and _NUMERIC_FIELD.match(
             token
@@ -1191,7 +1305,7 @@ def _is_data_row(text: str) -> bool:
     fields = text.split()
     if len(fields) < _MIN_ROW_FIELDS:
         return False
-    numeric = _numeric_fields(text)
+    numeric = _numeric_fields(text, fields)
     return numeric >= _MIN_ROW_FIELDS and numeric / len(fields) >= _ROW_NUMERIC_SHARE
 
 
@@ -1212,20 +1326,178 @@ def _classify(line: Line, model: StyleModel, median_advance: float, tables: bool
     return "para"
 
 
+def _table_headers(
+    page: list[Line], levels: list[int | None], kinds: list[str], model: StyleModel
+) -> tuple[dict[int, Block], set[int], dict[int, int]]:
+    """Recover compact label bands above numeric rows, without sorting the page.
+
+    Some producers write column labels after their data in the content stream.
+    Their existing glyph boxes still put them immediately above the table. Only
+    those labels move; columns, surrounding prose and source character offsets stay
+    intact. Uncertain rows retain ``row=-1`` rather than acquiring a numeric header.
+    """
+    headers: dict[int, Block] = {}
+    consumed: set[int] = set()
+    rows: dict[int, int] = {}
+    runs = 0
+    for is_table, indices in groupby(range(len(page)), key=lambda i: kinds[i] == "table_row"):
+        if not is_table:
+            continue
+        run = list(indices)
+        if len(run) < 2:
+            continue
+        runs += 1
+        # ponytail: bounded band scans, at most 16 table runs/page; a spatial index
+        # is only warranted if dense, fragmented table pages need more recovery.
+        if runs > 16:
+            break
+        first_data = next((i for i in run if _is_table_data_row(page[i].text)), None)
+        if first_data is None or run[-1] == first_data:
+            continue
+        first = page[first_data]
+        height = first.height or model.body_size
+        data = run[run.index(first_data) :]
+        left = min(page[i].bbox[0] for i in data)
+        right = max(page[i].bbox[2] for i in data)
+        top = first.bbox[3]
+        size = model.size_of(first)
+        labels = [
+            i
+            for i, line in enumerate(page)
+            if i not in consumed
+            and levels[i] is None
+            and kinds[i] in ("para", "table_row")
+            and top <= line.bbox[1] <= line.bbox[3] <= top + 8 * height
+            and left - 5 * height <= line.bbox[0] < line.bbox[2] <= right + 5 * height
+            and 0 < line.height <= 2.25 * height
+            and model.size_of(line) <= size * 1.15
+            and len(line.text) <= 180
+            and line.text[-1:] not in ".;!?:"
+            and not _is_table_data_row(line.text)
+        ]
+        if not labels:
+            continue
+        if len(labels) == 1:
+            label = page[labels[0]]
+            if len(label.text.split()) < 2 or (
+                not label.bold
+                and kinds[labels[0]] != "table_row"
+                and label.width / len(label.text)
+                <= first.width / len(first.text) * TABLE_DENSITY
+            ):
+                continue
+        # Overlapping horizontal label fragments belong to the same header region.
+        # A minimum overlap prevents one long line from joining adjacent columns.
+        groups: list[list[Line]] = []
+        for i in sorted(labels, key=lambda i: page[i].bbox[0]):
+            line = page[i]
+            for group in groups:
+                if any(
+                    min(part.bbox[2], line.bbox[2]) - max(part.bbox[0], line.bbox[0])
+                    >= 0.5 * min(part.width, line.width)
+                    for part in group
+                ):
+                    group.append(line)
+                    break
+            else:
+                groups.append([line])
+        text = " / ".join(
+            " ".join(line.text for line in sorted(group, key=_reading_order))
+            for group in groups
+        )
+        selected = [page[i] for i in labels]
+        headers[first_data] = Block(
+            kind="table_row",
+            text=text,
+            page=first.page,
+            start=min(line.start for line in selected),
+            end=max(line.end for line in selected),
+            bbox=(
+                min(line.bbox[0] for line in selected),
+                min(line.bbox[1] for line in selected),
+                max(line.bbox[2] for line in selected),
+                max(line.bbox[3] for line in selected),
+            ),
+            row=0,
+        )
+        consumed.update(labels)
+        rows.update((i, number) for number, i in enumerate(data, 1))
+    return headers, consumed, rows
+
+
+def _is_period_header(fields: list[str], numeric: int | None = None) -> bool:
+    """A named row with several year columns, including repeated quarterly years."""
+    if not fields or not fields[0][0].isalpha():
+        return False
+    years = 0
+    for token in fields:
+        if (
+            len(token) == 4
+            and token.isascii()
+            and token.isdigit()
+            and 1900 <= int(token) <= 2200
+        ):
+            years += 1
+        elif _NUMERIC_FIELD.match(token):
+            # A single non-year measurement disqualifies the whole header. Most
+            # data rows stop here rather than examining every remaining column.
+            return False
+    return years >= 2 and (numeric is None or years == numeric)
+
+
+def _is_table_data_row(text: str) -> bool:
+    """Numeric content in an already geometrically identified table run."""
+    fields = text.split()
+    numeric = _numeric_fields(text, fields)
+    return bool(
+        numeric
+        and numeric / len(fields) >= _ROW_NUMERIC_SHARE
+        and not _is_period_header(fields, numeric)
+    )
+
+
 def _emit_page(
     page: list[Line],
     model: StyleModel,
     *,
     tables: bool,
     median_advance: float,
+    diagnostics: dict | None = None,
 ) -> Iterator[Block]:
     """Turn one page's lines into blocks. Paragraphs never span a page here --
     a deliberate simplification; the chunker can rejoin using ``page``/``bbox``."""
     para = _Paragraph()
     previous: Line | None = None
-    for line in page:
-        level = _is_heading(line, model)
+    levels = [_is_heading(line, model) for line in page] if tables else []
+    kinds = (
+        [
+            _classify(line, model, median_advance, True) if level is None else "heading"
+            for line, level in zip(page, levels, strict=True)
+        ]
+        if tables
+        else []
+    )
+    headers, consumed, rows = (
+        _table_headers(page, levels, kinds, model)
+        if tables and kinds.count("table_row") > 1
+        else ({}, set(), {})
+    )
+    if diagnostics is not None and headers:
+        diagnostics["table_headers_recovered"] = diagnostics.get(
+            "table_headers_recovered", 0
+        ) + len(headers)
+    row_run = False
+    for index, line in enumerate(page):
+        if index in consumed:
+            continue
+        if index in headers:
+            block = para.flush()
+            if block:
+                yield block
+            yield headers[index]
+        level = levels[index] if tables else _is_heading(line, model)
         if level is not None:
+            row_run = False
             block = para.flush()
             if block:
                 yield block
@@ -1241,7 +1513,27 @@ def _emit_page(
             previous = line
             continue
 
-        kind = _classify(line, model, median_advance, tables)
+        kind = kinds[index] if tables else _classify(line, model, median_advance, False)
+        if (
+            kind == "table_row"
+            and index not in rows
+            and not row_run
+            and diagnostics is not None
+        ):
+            diagnostics["tables_without_headers"] = (
+                diagnostics.get("tables_without_headers", 0) + 1
+            )
+        row_run = kind == "table_row"
+        # A caption may wrap; its next line must stay in the same font and region.
+        # Font/column changes are stronger boundaries than a guessed vertical gap.
+        if (
+            kind == "para"
+            and previous is not None
+            and para.kind == "caption"
+            and line.size == previous.size
+            and abs(line.bbox[0] - previous.bbox[0]) < line.height
+        ):
+            kind = "caption"
         gap_break = False
         if previous is not None:
             gap = previous.bbox[1] - line.bbox[3]  # previous bottom - this top
@@ -1251,11 +1543,11 @@ def _emit_page(
             block = para.flush()
             if block:
                 yield block
-        if kind in ("table_row", "caption", "list_item"):
+        if kind in ("table_row", "list_item"):
             # These are row/item-granular: one block each, no merging across
             # rows, because a merged table is unreadable.
             para.add(line, kind)
-            block = para.flush()
+            block = para.flush(row=rows.get(index, -1))
             if block:
                 yield block
         else:
@@ -1293,6 +1585,7 @@ FURNITURE_MAX_CHARS = 90
 #: than geometric because a `Line` carries its own bbox but not the page height, and
 #: reading order already puts the running head first and the foot last.
 FURNITURE_EDGE_LINES = 2
+_FURNITURE_DIGITS = re.compile(r"\d+")
 
 
 def _furniture_key(text: str, side: str) -> tuple[str, str]:
@@ -1304,7 +1597,7 @@ def _furniture_key(text: str, side: str) -> tuple[str, str]:
     deletes a genuine ``2025`` section title at the top of a later page. A footer
     teaches a bottom key and a title is a top key, so they never collide.
     """
-    return side, re.sub(r"\d+", "#", text).strip().lower()
+    return side, _FURNITURE_DIGITS.sub("#", text).strip().lower()
 
 
 def _edge_sides(count: int) -> dict[int, str]:
@@ -1341,13 +1634,23 @@ class _Furniture:
         self.pages: dict[tuple[str, str], set[int]] = {}
         self.known: set[tuple[str, str]] = set()
         self.leaked = 0
+        self._last_page: list[Line] | None = None
+        self._last_keys: dict[int, tuple[str, str]] = {}
+
+    def _keys(self, page: list[Line]) -> dict[int, tuple[str, str]]:
+        # Observation and stripping use the same four margin keys. Cache only
+        # this page, so continuous furniture learning stays bounded in memory.
+        if page is not self._last_page:
+            self._last_page = page
+            self._last_keys = {
+                index: _furniture_key(page[index].text, side)
+                for index, side in _edge_sides(len(page)).items()
+                if page[index].text.strip()
+            }
+        return self._last_keys
 
     def observe(self, page: list[Line]) -> None:
-        for index, side in _edge_sides(len(page)).items():
-            text = page[index].text.strip()
-            if not text:
-                continue
-            key = _furniture_key(text, side)
+        for index, key in self._keys(page).items():
             if len(key[1]) > FURNITURE_MAX_CHARS:
                 continue
             if key in self.known:
@@ -1367,17 +1670,14 @@ class _Furniture:
         """Drop the learned heads and feet from one page."""
         if not self.known:
             return page, 0
-        sides = _edge_sides(len(page))
+        keys = self._keys(page)
         kept: list[Line] = []
         dropped = 0
         for index, line in enumerate(page):
-            side = sides.get(index)
-            text = line.text.strip()
-            if side is not None and text:
-                key = _furniture_key(text, side)
-                if len(key[1]) <= FURNITURE_MAX_CHARS and key in self.known:
-                    dropped += 1
-                    continue
+            key = keys.get(index)
+            if key is not None and len(key[1]) <= FURNITURE_MAX_CHARS and key in self.known:
+                dropped += 1
+                continue
             kept.append(line)
         if not kept:
             # Suppression must never empty a page. A document whose every page is the
@@ -1491,25 +1791,39 @@ def blocks(
 
     image_only: list[int] = []
     stats.setdefault("pages_image_only", image_only)
+    image_mixed: list[int] = []
+    stats.setdefault("pages_image_mixed", image_mixed)
+    replacement_chars: dict[int, int] = {}
+    stats.setdefault("pages_with_replacement_chars", replacement_chars)
+    stats.setdefault("replacement_chars", 0)
+    chars = [0]
+    spacing = 0.0
+    page_count = [0]
     for page in lines(
         path,
         page_range=page_range,
         reopen_every=reopen_every,
         image_only=image_only,
+        image_mixed=image_mixed,
+        replacement_chars=replacement_chars,
+        chars=chars,
         control_removed=control_removed,
         hyphen_counts=hyphen_counts,
         reordered=reordered,
+        page_count=page_count,
     ):
         stats["pages"] += 1
+        stats["page_count"] = page_count[0]
         # Updated per page rather than after the loop: `blocks()` is a generator, and a
         # caller that stops early with `islice` never reaches code past the loop.
         stats["control_chars_removed"] = control_removed[0]
         stats["hyphens_rejoined"], stats["hyphens_kept"] = hyphen_counts
         stats["pages_reordered"] = reordered[0]
+        stats["replacement_chars"] = sum(replacement_chars.values())
+        stats["chars"] = chars[0]
         if not page:
             stats["pages_without_text"] += 1
             continue
-        stats["chars"] += sum(len(line.text) for line in page)
 
         if model is None:
             for line in page:
@@ -1532,7 +1846,9 @@ def blocks(
                 kept, dropped = learner.strip(held) if learner is not None else (held, 0)
                 stats["furniture_lines"] += dropped
                 if kept:
-                    yield from _emit_page(kept, model, tables=tables, median_advance=spacing)
+                    yield from _emit_page(
+                        kept, model, tables=tables, median_advance=spacing, diagnostics=stats
+                    )
             buffered.clear()
             continue
 
@@ -1556,6 +1872,7 @@ def blocks(
                     advances.append(line.width / len(line.text))
                     if len(advances) > 400:
                         break
+            spacing = median_advance()
         # Observe *before* stripping, so a head that first appears after the
         # calibration window is still learned -- the cover-page-and-contents case.
         if learner is not None:
@@ -1563,8 +1880,11 @@ def blocks(
         kept, dropped = learner.strip(page) if learner is not None else (page, 0)
         stats["furniture_lines"] += dropped
         if kept:
-            yield from _emit_page(kept, model, tables=tables, median_advance=median_advance())
+            yield from _emit_page(
+                kept, model, tables=tables, median_advance=spacing, diagnostics=stats
+            )
 
+    stats["page_count"] = page_count[0]
     if learner is not None:
         stats["furniture_leaked"] = learner.leaked
     if buffered:  # document shorter than the calibration window
@@ -1577,4 +1897,6 @@ def blocks(
             kept, dropped = learner.strip(held) if learner is not None else (held, 0)
             stats["furniture_lines"] += dropped
             if kept:
-                yield from _emit_page(kept, model, tables=tables, median_advance=spacing)
+                yield from _emit_page(
+                    kept, model, tables=tables, median_advance=spacing, diagnostics=stats
+                )

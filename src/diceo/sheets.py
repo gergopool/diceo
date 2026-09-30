@@ -3,7 +3,7 @@
 Two halves, deliberately separable.
 
 **The reader** (:func:`iter_rows`) is stdlib only -- ``zipfile`` plus
-``ElementTree.iterparse`` over the worksheet part -- and it is a generator, so a
+``ElementTree.XMLPullParser`` over the worksheet part -- and it is a generator, so a
 1M-row sheet never exists as Python objects. It is here rather than in a faster
 form because the fast form is a byte scanner and the two must be measured against
 each other before one ships -- experiment 006 (office fast paths), run in the
@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple
-from xml.etree.ElementTree import iterparse
+from xml.etree.ElementTree import XMLPullParser, iterparse
 
 from diceo._diagnostic_text import bounded_list, images_note
 from diceo._zip_parts import MAX_DEPTH as _MAX_DEPTH
@@ -234,6 +234,9 @@ class SheetProfile:
     # the summary chunk rather than dropped (rule 3).
     preamble: list[str] = field(default_factory=list)
     preamble_rows: int = 0
+    #: Original header cells when a merge cannot be flattened safely. Repeated
+    #: as context, with positional column names rather than guessed associations.
+    header_context: str = ""
 
 
 @dataclass
@@ -502,8 +505,10 @@ def _is_date_code(code: str) -> bool:
             close = code.find("]", index + 1)
             if close < 0:
                 return False
-            if code[index + 1 : index + 2].lower() in {"h", "m", "s"}:
-                return True  # [h]:mm -- an elapsed duration, still time-shaped
+            # [h]:mm is an elapsed duration, still time-shaped. Only the whole
+            # bracket decides: [Magenta] and [mmm-409] start with an `m` too.
+            if re.fullmatch(r"[hHmMsS]+", code[index + 1 : close]):
+                return True
             index = close + 1
         elif char in "\\_":
             index += 2
@@ -739,7 +744,7 @@ def _iter_part_rows(
     report: SheetDiagnostics,
     max_rows: int | None,
 ) -> Iterator[Row]:
-    """Rows of one worksheet part, streamed with ``iterparse`` + ``clear()``.
+    """Rows of one worksheet part, streamed with ``XMLPullParser`` + ``clear()``.
 
     ``clear()`` on the row is necessary but **not sufficient**, and the difference
     is the whole reason "just use iterparse" is not automatically streaming.
@@ -789,107 +794,121 @@ def _iter_part_rows(
         #: of the whole docx and xlsx read before this line existed.
         max_depth = _MAX_DEPTH
         max_open = _MAX_OPEN_ELEMENTS
-        for event, element in iterparse(guarded, ("start", "end")):
-            # Hoisted: every event reads the tag at least once, and a non-row end
-            # event -- one per cell, so most of them -- used to read it twice.
-            tag = element.tag
-            if event == "start":
-                depth += 1
-                open_elements += 1
-                if depth > max_depth or open_elements > max_open:
-                    _refuse_shape(depth, open_elements, name=archive.filename or "", part=part)
-                if first:
-                    first = False
-                    found = _namespace_of(tag)
-                    if found != _MAIN:
-                        # ISO 29500 Strict, or any other spelling. See _STRICT_MAIN.
-                        cell_tag, row_tag = found + "c", found + "row"
-                        value_tag, inline_tag = found + "v", found + "is"
-                        text_tag = found + "t"
-                        sheet_data_tag, formula_tag = found + "sheetData", found + "f"
-                        merges_tag = found + "mergeCells"
-                if tag == sheet_data_tag:
-                    parent = element
-                continue
-            depth -= 1
-            if tag != row_tag:
-                # One extra identity comparison per non-row end event, and it is the
-                # only thing outside `sheetData` this loop looks at. `<mergeCells>`
-                # arrives once, after every row, and holds one child per range.
-                if tag == merges_tag:
-                    vertical = 0
-                    for child in element:
-                        span = _MERGE_SPAN.match(child.get("ref", ""))
-                        if span is not None and int(span.group(2)) > int(span.group(1)):
-                            vertical += 1
-                    if vertical:
-                        report.vertical_merges.append((name, vertical))
-                    element.clear()
-                    open_elements = 0
-                continue
-            raw = element.get("r")
-            if not raw:
-                number += 1
+        # Same bounded feed and events as iterparse, without its extra per-event
+        # iterator hop. The DOCX reader uses the same direct stdlib loop.
+        parser = XMLPullParser(("start", "end"))
+        while True:
+            data = guarded.read(16_384)
+            if data:
+                parser.feed(data)
             else:
-                try:
-                    number = int(raw)
-                except ValueError:
-                    # `r="abc"`, or 5,000 digits. Counted, and the row is numbered by
-                    # position: its cells are real content and losing them to a bad
-                    # attribute is the trade rule 3 forbids.
-                    report.malformed_attributes += 1
-                    number += 1
-            cells: list[str] = []
-            for cell in element:
-                if cell.tag != cell_tag:
-                    continue
-                reference = cell.get("r")
-                # A cell belongs to the column its reference names, not to its turn in
-                # the file. The padding here used to be one-directional -- extend when
-                # the index runs ahead, otherwise fall through to `append` -- so a row
-                # written C then A came out as ['', '', 'THIRD', 'FIRST']: a phantom
-                # fourth column and every value under the wrong header. Excel writes
-                # cells in order; the spec does not require it and other producers do
-                # not. `r` is optional, and without it the column *is* the position.
-                index = (
-                    _column_index(reference, columns) if reference is not None else len(cells)
-                )
-                kind = cell.get("t")
-                if kind == "inlineStr":
-                    node = cell.find(inline_tag)
-                    value = (
-                        unescape_cell(
-                            "".join(part.text or "" for part in node.iter(text_tag)), report
+                parser.close()
+            for event, element in parser.read_events():
+                # Hoisted: every event reads the tag at least once, and a non-row end
+                # event -- one per cell, so most of them -- used to read it twice.
+                tag = element.tag
+                if event == "start":
+                    depth += 1
+                    open_elements += 1
+                    if depth > max_depth or open_elements > max_open:
+                        _refuse_shape(
+                            depth, open_elements, name=archive.filename or "", part=part
                         )
-                        if node is not None
-                        else ""
-                    )
+                    if first:
+                        first = False
+                        found = _namespace_of(tag)
+                        if found != _MAIN:
+                            # ISO 29500 Strict, or any other spelling. See _STRICT_MAIN.
+                            cell_tag, row_tag = found + "c", found + "row"
+                            value_tag, inline_tag = found + "v", found + "is"
+                            text_tag = found + "t"
+                            sheet_data_tag, formula_tag = found + "sheetData", found + "f"
+                            merges_tag = found + "mergeCells"
+                    if tag == sheet_data_tag:
+                        parent = element
+                    continue
+                depth -= 1
+                if tag != row_tag:
+                    # One extra identity comparison per non-row end event, and it is the
+                    # only thing outside `sheetData` this loop looks at. `<mergeCells>`
+                    # arrives once, after every row, and holds one child per range.
+                    if tag == merges_tag:
+                        vertical = 0
+                        for child in element:
+                            span = _MERGE_SPAN.match(child.get("ref", ""))
+                            if span is not None and int(span.group(2)) > int(span.group(1)):
+                                vertical += 1
+                        if vertical:
+                            report.vertical_merges.append((name, vertical))
+                        element.clear()
+                        open_elements = 0
+                    continue
+                raw = element.get("r")
+                if not raw:
+                    number += 1
                 else:
-                    node = cell.find(value_tag)
-                    text = node.text if node is not None and node.text is not None else ""
-                    if kind == "s":
-                        try:
-                            value = strings[int(text)]
-                        except (IndexError, ValueError):
-                            report.shared_string_misses += 1
-                            value = ""
-                    elif kind == "b":
-                        # No cached value means the cell is *empty*, not false.
-                        # Rendering FALSE there fabricates data, and a fabricated
-                        # value is worse than a blank because nothing downstream can
-                        # tell it from a real one.
-                        value = ("TRUE" if text == "1" else "FALSE") if text else ""
-                    elif kind == "e":
-                        # An Excel error cell has no value to index. Count it so the
-                        # loss is visible rather than silent, and keep the column, or
-                        # every later value shifts one place left.
-                        report.error_cells += 1
-                        value = ""
-                    elif kind is None or kind == "n":
+                    try:
+                        number = int(raw)
+                    except ValueError:
+                        # `r="abc"`, or 5,000 digits. Counted, and the row is numbered by
+                        # position: its cells are real content and losing them to a bad
+                        # attribute is the trade rule 3 forbids.
+                        report.malformed_attributes += 1
+                        number += 1
+                cells: list[str] = []
+                for cell in element:
+                    if cell.tag != cell_tag:
+                        continue
+                    reference = cell.get("r")
+                    # A cell belongs to the column its reference names, not to its turn in
+                    # the file. The padding here used to be one-directional -- extend when
+                    # the index runs ahead, otherwise fall through to `append` -- so a row
+                    # written C then A came out as ['', '', 'THIRD', 'FIRST']: a phantom
+                    # fourth column and every value under the wrong header. Excel writes
+                    # cells in order; the spec does not require it and other producers do
+                    # not. `r` is optional, and without it the column *is* the position.
+                    index = (
+                        _column_index(reference, columns)
+                        if reference is not None
+                        else len(cells)
+                    )
+                    kind = cell.get("t")
+                    if kind == "inlineStr":
+                        node = cell.find(inline_tag)
+                        value = (
+                            unescape_cell(
+                                "".join(part.text or "" for part in node.iter(text_tag)), report
+                            )
+                            if node is not None
+                            else ""
+                        )
+                    else:
+                        node = cell.find(value_tag)
+                        text = node.text if node is not None and node.text is not None else ""
                         if node is None and cell.find(formula_tag) is not None:
+                            # A formula with no cached value, whatever its type -- `str`
+                            # and `b` blanked silently before only `n` was counted.
                             report.formula_cells_unevaluated += 1
                             value = ""
-                        else:
+                        elif kind == "s":
+                            try:
+                                value = strings[int(text)]
+                            except (IndexError, ValueError):
+                                report.shared_string_misses += 1
+                                value = ""
+                        elif kind == "b":
+                            # No cached value means the cell is *empty*, not false.
+                            # Rendering FALSE there fabricates data, and a fabricated
+                            # value is worse than a blank because nothing downstream can
+                            # tell it from a real one.
+                            value = ("TRUE" if text == "1" else "FALSE") if text else ""
+                        elif kind == "e":
+                            # An Excel error cell has no value to index. Count it so the
+                            # loss is visible rather than silent, and keep the column, or
+                            # every later value shifts one place left.
+                            report.error_cells += 1
+                            value = ""
+                        elif kind is None or kind == "n":
                             style = cell.get("s")
                             # `dated` short-circuits first, so a workbook with no date
                             # formats at all never pays for any of this. Not named
@@ -903,48 +922,50 @@ def _iter_part_rows(
                                 value = _serial_text(text, epoch_1904=epoch_1904)
                             else:
                                 value = _clean_number(text) if text else text
+                        else:
+                            value = text
+                    if index < 0 or index >= MAX_COLUMNS:
+                        # The reference names no column, or a column the format does not
+                        # have. Both are malformed, and both used to do damage silently --
+                        # -1 overwrote the previous cell, a huge index exhausted memory.
+                        # The value itself is real, so it is appended rather than dropped
+                        # (rule 3) and the reference is counted.
+                        report.invalid_cell_references += 1
+                        cells.append(value)
+                        continue
+                    # The in-order case -- what every producer writes and what the padding
+                    # loop below spent two `len()` calls and a store on -- is one append.
+                    # Out of order or with gaps, pad in one `extend` rather than one
+                    # `append` per missing column.
+                    width = len(cells)
+                    if index == width:
+                        cells.append(value)
+                    elif index > width:
+                        cells.extend([""] * (index - width))
+                        cells.append(value)
                     else:
-                        value = text
-                if index < 0 or index >= MAX_COLUMNS:
-                    # The reference names no column, or a column the format does not
-                    # have. Both are malformed, and both used to do damage silently --
-                    # -1 overwrote the previous cell, a huge index exhausted memory.
-                    # The value itself is real, so it is appended rather than dropped
-                    # (rule 3) and the reference is counted.
-                    report.invalid_cell_references += 1
-                    cells.append(value)
-                    continue
-                # The in-order case -- what every producer writes and what the padding
-                # loop below spent two `len()` calls and a store on -- is one append.
-                # Out of order or with gaps, pad in one `extend` rather than one
-                # `append` per missing column.
-                width = len(cells)
-                if index == width:
-                    cells.append(value)
-                elif index > width:
-                    cells.extend([""] * (index - width))
-                    cells.append(value)
-                else:
-                    cells[index] = value
-            element.clear()
-            open_elements = 0
-            # Unlink the emptied rows from sheetData. Safe because every child it
-            # holds has already been handled -- rows arrive in document order. The
-            # batch of 64 amortises the slice assignment over many rows.
-            if parent is not None and len(parent) > 64:
-                del parent[:]
+                        cells[index] = value
+                element.clear()
+                open_elements = 0
+                # Unlink the emptied rows from sheetData. Safe because every child it
+                # holds has already been handled -- rows arrive in document order. The
+                # batch of 64 amortises the slice assignment over many rows.
+                if parent is not None and len(parent) > 64:
+                    del parent[:]
 
-            while cells and not cells[-1]:
-                cells.pop()
-            if not cells:
-                continue
-            report.rows += 1
-            report.cells += len(cells)
-            emitted += 1
-            yield Row(name, number, cells)
-            if max_rows is not None and emitted >= max_rows:
-                report.truncated.append(("max_rows", max_rows, -1))
-                return
+                while cells and not cells[-1]:
+                    cells.pop()
+                if not cells:
+                    continue
+                report.rows += 1
+                report.cells += len(cells)
+                emitted += 1
+                yield Row(name, number, cells)
+                if max_rows is not None and emitted >= max_rows:
+                    report.truncated.append(("max_rows", max_rows, -1))
+                    return
+            if not data:
+                break
 
 
 def iter_rows(
@@ -1040,6 +1061,7 @@ def iter_rows(
 _NUMBER = re.compile(r"^-?[\d.,]+(?:[eE][-+]?\d+)?%?$")
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 _BOOL = frozenset({"TRUE", "FALSE"})
+_YEAR_LABEL = re.compile(r"^(?:18|19|20|21)\d{2}(?:\s+\[note[^\]]*\])?$")
 
 
 def _looks_numeric(value: str) -> bool:
@@ -1091,6 +1113,33 @@ def _row_is_texty(cells: list[str]) -> bool:
     if not present:
         return False
     return sum(1 for value in present if not _looks_numeric(value)) >= len(present) * 0.8
+
+
+def _row_has_year_labels(cells: list[str]) -> bool:
+    """Recognise consecutive year columns, including publication footnote labels.
+
+    Only called in the bounded profile sample or after a row-number gap. A
+    numeric data row or one year-valued category is not a header.
+    """
+    # ponytail: consecutive years only; widen when a real header needs another pattern.
+    labelled = False
+    years: list[int] = []
+    for value in cells:
+        value = value.strip()
+        if _YEAR_LABEL.fullmatch(value):
+            years.append(int(value[:4]))
+        elif value:
+            if _looks_numeric(value):
+                return False
+            labelled = True
+    return (
+        labelled
+        and len(years) >= 2
+        and all(
+            right == left + 1 or (right == years[0] and left > years[0])
+            for left, right in zip(years, years[1:], strict=False)
+        )
+    )
 
 
 def _flatten(header_rows: list[list[str]], width: int) -> list[str]:
@@ -1221,6 +1270,27 @@ def _profile(
         None,
     )
 
+    # Years are numeric cell values but column labels in statistical tables.
+    # Only promote the first transition, and never swallow a year-valued body
+    # row beneath an already recognisable text header.
+    year_header = (
+        first_data is not None
+        and first_data + 1 < len(sample)
+        and (
+            first_data == 0
+            or not (
+                wide_enough(sample[first_data - 1])
+                and _row_is_texty(sample[first_data - 1].cells)
+            )
+        )
+        and _row_has_year_labels(sample[first_data].cells)
+        and wide_enough(sample[first_data + 1])
+        and not _row_is_texty(sample[first_data + 1].cells)
+        and not _row_has_year_labels(sample[first_data + 1].cells)
+    )
+    if year_header:
+        first_data += 1
+
     if first_data is None:
         # No numeric transition anywhere in the sample. Either this is prose, or
         # it is an all-text table. Guess a header only when row 1 looks like a
@@ -1270,7 +1340,11 @@ def _profile(
 
     # Walk back over the body-width text rows directly above the data.
     top = first_data
-    while top > 0 and wide_enough(sample[top - 1]) and _row_is_texty(sample[top - 1].cells):
+    while (
+        top > 0
+        and wide_enough(sample[top - 1])
+        and ((year_header and top == first_data) or _row_is_texty(sample[top - 1].cells))
+    ):
         top -= 1
         if first_data - top >= 4:  # deeper than this and we are guessing
             notes.append("header run capped at 4 rows")
@@ -1318,20 +1392,40 @@ def _profile(
             for value in list(header_rows[0]) + [""] * (body_width - len(header_rows[0]))
         ]
     )
+    dtypes = _dtypes_for(data, len(header))
+    confidence = "clean" if len(header_rows) == 1 else "merged-header"
+    header_context = ""
+    if len(header_rows) > 1 and any(
+        not label and dtype in {"number", "date"}
+        for label, dtype in zip(header, dtypes, strict=True)
+    ):
+        # Merge ranges follow sheetData. A second worksheet pass adds I/O,
+        # and carrying a heading from a series identifier into an
+        # unlabelled numeric column would invent the metric. Keep the source
+        # labels as context and name columns by position instead.
+        header_context = "Header cells (column association uncertain):\n" + "\n".join(
+            " | ".join(cells) for cells in header_rows
+        )
+        header = [f"Column {index + 1}" for index in range(len(header))]
+        confidence = "uncertain"
+        notes.append(
+            "multirow header leaves numeric columns unnamed; labels kept without guessing"
+        )
     return SheetProfile(
         sheet=sheet,
         title=title,
         header=header,
         header_rows=len(header_rows),
         first_data_row=data[0].number,
-        confidence="clean" if len(header_rows) == 1 else "merged-header",
-        dtypes=_dtypes_for(data, len(header)),
+        confidence=confidence,
+        dtypes=dtypes,
         samples=[row.cells for row in data[:3]],
         declared_rows=declared[0],
         declared_columns=declared[1],
         notes=notes,
         preamble=preamble_lines,
         preamble_rows=len(preamble),
+        header_context=header_context,
     )
 
 
@@ -1397,6 +1491,8 @@ def _summary_text(profile: SheetProfile, row_count: int | None) -> tuple[str, in
         lines.append(f"Rows: {row_count:,}")
     for line in profile.preamble:
         lines.append(f"  {line}")
+    if profile.header_context:
+        lines.append(profile.header_context)
     if profile.header:
         lines.append(f"Columns ({len(profile.header)}):")
         # `strict=True`, deliberately. This used to be `strict=False`, which did not
@@ -1526,6 +1622,18 @@ def _report_group_cost(report: SheetDiagnostics, state: _ChunkState, target: int
             f"copy of the sheet; each of those rows is still emitted in full in its "
             f"own row group"
         )
+    if state.table_header_resets:
+        report.notes.append(
+            f"table_header_resets={state.table_header_resets} "
+            f"({', '.join(state.table_header_examples)}): a new label row "
+            f"after a blank-row gap starts a separate table context"
+        )
+    if state.unresolved_headers:
+        report.notes.append(
+            f"sheets_with_unresolved_header={len(state.unresolved_headers)} "
+            f"({bounded_list(state.unresolved_headers, limit=5)}): original header "
+            f"cells are repeated as context; column associations are uncertain"
+        )
     if state.groups_without_letters:
         report.notes.append(
             f"chunks_without_letters={state.groups_without_letters}: row groups holding "
@@ -1558,8 +1666,8 @@ class _ChunkState:
         self.sample: list[Row] = []
         self.profile: SheetProfile | None = None
         self.header_line = ""
+        self.header_has_letters = False
         self.group: list[str] = []
-        self.group_rows = 0
         self.first = 0
         self.last = 0
         self.size = 0
@@ -1593,12 +1701,19 @@ class _ChunkState:
         #: `_SAMPLE_LINE_CHARS`). A cap that bites has to be visible, even when --
         #: as here -- it costs the index nothing.
         self.samples_shortened = 0
+        self.next_header: Row | None = None
+        self.table_header_resets = 0
+        self.table_header_examples: list[str] = []
+        self.unresolved_headers: list[str] = []
 
     def open(self, sheet: str) -> None:
         self.sheet = sheet
         self.sample = []
         self.profile = None
         self.header_line = ""
+        self.header_has_letters = False
+        self.last = 0
+        self.next_header = None
 
     def _decide(
         self, declared: dict[str, tuple[int | None, int | None]]
@@ -1608,6 +1723,10 @@ class _ChunkState:
         assert self.sheet is not None
         self.profile = _profile(self.sheet, self.sample, declared.get(self.sheet, (None, None)))
         self.header_line = " | ".join(self.profile.header) if self.profile.header else ""
+        if self.profile.header_context:
+            self.header_line = self.profile.header_context + "\n" + self.header_line
+            self.unresolved_headers.append(self.sheet)
+        self.header_has_letters = any(map(str.isalpha, self.header_line))
         if not self.header_line:
             self.sheets_without_header.append(self.sheet)
         summary, shortened = _summary_text(self.profile, self.profile.declared_rows)
@@ -1622,16 +1741,47 @@ class _ChunkState:
         for row in held:
             yield from self._add(row)
 
-    def _add(self, row: Row) -> Iterator[SheetChunk]:
+    def _add(self, row: Row, replay: bool = False) -> Iterator[SheetChunk]:
+        if self.next_header is not None:
+            candidate = self.next_header
+            self.next_header = None
+            if (
+                len(row.cells) >= len(candidate.cells) * 0.6
+                and not _row_is_texty(row.cells)
+                and not _row_has_year_labels(row.cells)
+            ):
+                yield from self._flush()
+                self.last = candidate.number
+                self.header_line = " | ".join(value.strip() for value in candidate.cells)
+                self.header_has_letters = any(map(str.isalpha, self.header_line))
+                self.table_header_resets += 1
+                if len(self.table_header_examples) < 5:
+                    self.table_header_examples.append(f"{row.sheet}!{candidate.number}")
+            else:
+                yield from self._add(candidate, replay=True)
+        # ponytail: one header row after a blank-row gap; profile a bounded
+        # header run if real multirow transitions need it. Classification stays
+        # out of the usual row path until that gap and table width are present.
+        if (
+            row.number > self.last + 1
+            and self.last
+            and not replay
+            and self.header_line
+            and self.profile is not None
+            and len(row.cells) >= max(2, len(self.profile.header) * 0.6)
+            and (_row_is_texty(row.cells) or _row_has_year_labels(row.cells))
+        ):
+            self.next_header = row
+            return
         line = " | ".join(row.cells)
-        if self.group and self.size + len(line) + 1 > self.target:
+        line_size = len(line) + 1
+        if self.group and self.size + line_size > self.target:
             yield from self._flush()
         if not self.group:
             self.first = row.number
         self.last = row.number
         self.group.append(line)
-        self.group_rows += 1
-        self.size += len(line) + 1
+        self.size += line_size
 
     def _flush(self) -> Iterator[SheetChunk]:
         if not self.group:
@@ -1651,15 +1801,14 @@ class _ChunkState:
         # group, 101 us to 47 us. Not the regex `[^\W\d_]`, which is faster still and
         # not the same test -- it matches Nl/No characters (Roman numerals, circled
         # digits) that `str.isalpha` calls non-alphabetic.
-        if not any(map(str.isalpha, body)):
+        if not self.header_has_letters and not any(map(str.isalpha, body)):
             self.groups_without_letters += 1
         if len(body) > self.widest:
             self.widest = len(body)
         yield SheetChunk(
-            "row_group", self.sheet or "", body, self.first, self.last, self.group_rows
+            "row_group", self.sheet or "", body, self.first, self.last, len(self.group)
         )
         self.group = []
-        self.group_rows = 0
         self.size = 0
 
     def feed(
@@ -1678,5 +1827,9 @@ class _ChunkState:
             return
         if self.profile is None:
             yield from self._decide(declared)
+        if self.next_header is not None:
+            candidate = self.next_header
+            self.next_header = None
+            yield from self._add(candidate, replay=True)
         yield from self._flush()
         self.sheet = None

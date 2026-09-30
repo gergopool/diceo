@@ -23,8 +23,8 @@ from typing import IO, NamedTuple
 from diceo._diagnostic_text import control_chars_note, images_note
 from diceo.types import Block, Diagnostics, Locator
 
-#: Elements whose text is never content. ``svg`` and ``math`` are in here because
-#: their character data is coordinates and operators -- indexing it is pure noise.
+#: Elements whose character data is not prose. MathML stays on this path, but its
+#: authored text alternative is recovered before its presentation tree is skipped.
 #:
 #: ``head`` is deliberately *absent*: skipping it wholesale also skips ``<title>``,
 #: which is a document's most reliable one-line summary. Its other children carry
@@ -616,6 +616,13 @@ def text_lines(handle: IO[bytes], report: Diagnostics | None = None) -> Iterator
             wrapper.detach()
 
 
+#: A paragraph with no blank line in it is flushed at a line boundary past this many
+#: characters. Unbounded, a 20 MB log with no blank lines was one string (81 MB peak)
+#: and produced its first chunk only at end of file. The chunker splits it anyway.
+_MAX_PENDING_TEXT = 1 << 16
+_LIST_MARKER = re.compile(r"\d+[.)] ")
+
+
 def iter_text_blocks(handle: IO[bytes], report: Diagnostics) -> Iterator[Block]:
     """Plain text and Markdown. A blank line ends a block; ``#`` sets a level.
 
@@ -623,11 +630,18 @@ def iter_text_blocks(handle: IO[bytes], report: Diagnostics) -> Iterator[Block]:
     and rule 2 applies to text as much as to PDF.
     """
     pending: list[str] = []
+    pending_chars = 0
     fence = False
     for raw in text_lines(handle, report):
         line = raw.rstrip("\n")
         report.chars += len(line) + 1
         stripped = line.strip()
+        if pending_chars > _MAX_PENDING_TEXT:
+            yield Block("paragraph", "\n".join(pending), 0, Locator())
+            pending = []
+        if not pending:
+            pending_chars = 0
+        pending_chars += len(line) + 1
 
         if stripped.startswith("```") or stripped.startswith("~~~"):
             # Inside a fence, blank lines and '#' are content, not structure.
@@ -655,7 +669,9 @@ def iter_text_blocks(handle: IO[bytes], report: Diagnostics) -> Iterator[Block]:
                 yield Block("heading", stripped[marker:].strip(" #"), marker, Locator())
                 continue
 
-        if stripped.startswith(("- ", "* ", "+ ")) or re.match(r"\d+[.)] ", stripped):
+        if stripped.startswith(("- ", "* ", "+ ")) or (
+            stripped[:1].isdigit() and _LIST_MARKER.match(stripped)
+        ):
             if pending:
                 yield Block("paragraph", "\n".join(pending), 0, Locator())
                 pending = []
@@ -668,7 +684,10 @@ def iter_text_blocks(handle: IO[bytes], report: Diagnostics) -> Iterator[Block]:
                 pending = []
             if set(stripped) <= set("|-: \t"):  # the ---|--- rule under a header
                 continue
-            yield Block("table_row", stripped.strip("| ").strip(), 0, Locator())
+            # Cell by cell, so an empty first cell survives: stripping `| ` off the
+            # whole row moved every value of `|  | 5 |` one column left.
+            cells = [cell.strip() for cell in stripped[1:-1].split("|")]
+            yield Block("table_row", " | ".join(cells), 0, Locator())
             continue
 
         pending.append(line)
@@ -688,7 +707,7 @@ def iter_text_blocks(handle: IO[bytes], report: Diagnostics) -> Iterator[Block]:
 #: nothing pops until a matching end tag arrives -- so a page that never *closes*
 #: anything holds one frame per tag whatever its tags are, and the tags do not have to
 #: be ones this reader knows. `<table>` is the expensive one, because it also saves a
-#: nine-field frame holding three freshly allocated containers: measured through
+#: table frame holding three freshly allocated containers: measured through
 #: `iter_html_blocks` in a clean process, 6.7 MB of `<table>` grew the process by
 #: **498 MB** and 2.9 MB of `<b>` by 126 MB, both with `truncated` empty. A 100 MB
 #: crawled page of that shape is several GB. `Limits` cannot see it -- it is checked
@@ -747,11 +766,28 @@ class _HtmlBlocks(HTMLParser):
         #: the whole reason a `table_row` is worth recovering.
         self._cell_depth = 0
         self._fragments: list[str] = []
+        #: The next row emitted is a table's first, so it carries `row=0`: that is
+        #: how the chunker tells two adjacent tables from one.
+        self._first_row = False
+        #: One entry per open `<ul>`/`<ol>`: ``None`` for bullets, else the last
+        #: number used. `_marker` is the prefix the open `<li>`'s first text takes.
+        #: Without them a list read as bare lines, where the markdown path kept `- `.
+        self._lists: list[int | None] = []
+        self._marker = ""
+        #: A `<dt>` waiting for its `<dd>`, emitted as `term: definition` -- two
+        #: bare alternating lines read as unrelated paragraphs.
+        self._term: str | None = None
         #: One saved frame per enclosing `<table>`. Layout-nested tables are
         #: everywhere on the web, and with a single set of these fields the inner
         #: table's first `<tr>` discarded the outer row's cells entirely.
         self._frames: list[tuple] = []
         self._skip = 0
+        self._hidden_tag = ""
+        self.hidden_chars = 0
+        self._math = False
+        self._math_text = ""
+        self._annotation: list[str] | None = None
+        self.math_without_text = 0
         #: Characters inside ``script``/``style``/``svg``/``math``/``template``. Normally
         #: this is CSS and JavaScript and dropping it is the whole point; it matters only
         #: when the element never closes, and then it is the rest of the document.
@@ -820,10 +856,10 @@ class _HtmlBlocks(HTMLParser):
         # `collapse` is False for exactly one caller, `</pre>`: it is the one element
         # whose segment breaks CSS does *not* turn into spaces, and its line breaks
         # are the only structure a pasted code block has.
-        pattern = _HTML_WHITESPACE if collapse else _WHITESPACE
-        text = pattern.sub(" ", "".join(self._text)).strip()
+        raw = "".join(self._text)
+        text = _HTML_WHITESPACE.sub(" ", raw).strip() if collapse else raw.strip("\r\n")
         self._text.clear()
-        if not text:
+        if not text or (not collapse and not has_visible_text(text)):
             return
         if self._chrome:
             # Site chrome: counted, not emitted. Measured on 8 real pages, this is 2.3%
@@ -831,13 +867,51 @@ class _HtmlBlocks(HTMLParser):
             # scales inversely with document length, and crawled pages are short.
             self.boilerplate_chars += len(text)
             return
+        if kind == "term":
+            if self._term is not None:
+                self.out.append(Block("paragraph", self._term, 0, Locator()))
+            self._term = text
+            return
+        if self._marker and kind in ("paragraph", "list_item"):
+            text, kind, level = self._marker + text, "list_item", len(self._lists) or 1
+            self._marker = ""
+        elif kind == "list_item":
+            kind = "paragraph"  # an item's text after a nested list: a continuation
+        if self._term is not None:
+            if kind == "paragraph":
+                text = f"{self._term}: {text}"
+            else:
+                self.out.append(Block("paragraph", self._term, 0, Locator()))
+            self._term = None
         self.out.append(Block(kind, text, level, Locator()))
 
     def handle_starttag(self, tag: str, attrs: list) -> None:
-        if tag in _SKIP:
-            self._skip += 1
-            return
         if self._skip:
+            if tag in _SKIP or tag == self._hidden_tag:
+                self._skip += 1
+            elif self._math and not self._math_text and tag == "annotation":
+                encoding = next((v for k, v in attrs if k == "encoding"), "") or ""
+                if encoding.lower() in {
+                    "application/x-tex",
+                    "application/x-latex",
+                    "text/x-tex",
+                    "text/latex",
+                    "text/plain",
+                }:
+                    self._annotation = []
+            return
+        if tag in _SKIP:
+            if tag == "math":
+                self._math = True
+                for key, value in attrs:
+                    if key == "hidden" and (value or "").lower() != "until-found":
+                        self._hidden_tag = tag
+                        self._math = False
+                        self._math_text = ""
+                        break
+                    if key in ("alttext", "aria-label") and value and not self._math_text:
+                        self._math_text = value.strip()
+            self._skip = 1
             return
         role = ""
         tracked = True
@@ -854,6 +928,13 @@ class _HtmlBlocks(HTMLParser):
                 for key, value in attrs:
                     if key == "role" and value:
                         role = value.strip().lower()
+                    elif key == "hidden" and (value or "").lower() != "until-found":
+                        # aria-hidden does not imply invisible: decorative spans can
+                        # still hold visible punctuation, units or mathematical text.
+                        # until-found is explicitly searchable content in HTML.
+                        self._hidden_tag = tag
+                        self._skip = 1
+                        return
                 self._stack.append((tag, role))
                 self._open[tag] = self._open.get(tag, 0) + 1
                 if tag in ("td", "th"):
@@ -878,8 +959,13 @@ class _HtmlBlocks(HTMLParser):
             # only machine-readable form of a chart's message. MarkItDown keeps it; we
             # dropped it, and the corpus writes alt="" so nothing noticed
             # (experiment 033, adjudication).
+            alt = ""
+            for key, value in attrs:
+                if key == "hidden" and (value or "").lower() != "until-found":
+                    return
+                if key == "alt" and value:
+                    alt = value
             self._images += 1
-            alt = next((v for k, v in attrs if k == "alt" and v), "")
             if alt:
                 self._flush()
                 self.out.append(
@@ -911,6 +997,7 @@ class _HtmlBlocks(HTMLParser):
                     self._span,
                     self._rowspan,
                     self._fragments,
+                    self._first_row,
                 )
             )
             self._cells = []
@@ -922,6 +1009,7 @@ class _HtmlBlocks(HTMLParser):
             self._span = 1
             self._rowspan = 1
             self._fragments = []
+            self._first_row = True
             return
         if tag == "tr":
             if self._in_row:
@@ -959,12 +1047,42 @@ class _HtmlBlocks(HTMLParser):
             # or heading *inside* a cell: a line break in that cell, never a block.
             self._flush_cell_fragment()
             return
+        if (self._heading and tag in _BLOCK and tag not in _HEADINGS) or (
+            tag == "br" and self._marker
+        ):
+            # `<h2>Annual<br>Report</h2>` is one heading, not a paragraph and a
+            # heading: inside one, a block tag is a space. So is a `<br>` in a list
+            # item that has not been emitted yet -- the item is one line.
+            self._text.append(" ")
+            return
         if tag in _HEADINGS:
             self._flush()
             self._heading = _HEADINGS[tag]
             return
+        if tag in ("ul", "ol"):
+            self._flush()
+            if tracked:
+                start = 1
+                if tag == "ol":
+                    for key, value in attrs:
+                        if key == "start" and value and value.strip().isdigit():
+                            start = int(value)
+                self._lists.append(None if tag == "ul" else start - 1)
+            return
+        if tag == "li":
+            self._flush()
+            number = self._lists[-1] if self._lists else None
+            if number is None:
+                self._marker = "- "
+            else:
+                self._lists[-1] = number + 1
+                self._marker = f"{number + 1}. "
+            return
         if tag in _BLOCK:
-            self._flush("list_item" if tag == "li" else "paragraph")
+            if tag == "br" and self._open.get("pre"):
+                self._text.append("\n")
+                return
+            self._flush()
 
     def _drop_chrome(self) -> None:
         """Leave the chrome region, flushing whatever it accumulated into the counter."""
@@ -985,7 +1103,8 @@ class _HtmlBlocks(HTMLParser):
           itself. Inside an ``<article>``, ``<section>`` or ``<figure>`` they are that
           thing's header and footer -- the real ONS bulletin keeps all ten of its section
           headings in ``article > div > section > header``, and its table sources in
-          ``figure > footer``.
+          ``figure > footer``. A header inside ``main`` is also document content:
+          GOV.UK puts its page title and publication metadata there.
 
         ``<aside>`` is deliberately kept: it holds pull-quotes and key-facts boxes at
         least as often as sponsor messages.
@@ -1001,6 +1120,8 @@ class _HtmlBlocks(HTMLParser):
         # has looked at one frame.
         for index in range(len(self._stack) - 2, -1, -1):
             ancestor = self._stack[index][0]
+            if tag == "header" and ancestor == "main":
+                return False
             if ancestor in _SECTIONING or ancestor in _SECTION_ROOTS:
                 return ancestor == "body"
         return True
@@ -1130,17 +1251,26 @@ class _HtmlBlocks(HTMLParser):
         while self._cells and not self._cells[-1]:
             self._cells.pop()
         if any(self._cells):
-            # Tab-separated, matching what the sheet and PDF table readers
-            # emit, so one chunker rule covers rows from every format.
-            self.out.append(Block("table_row", "\t".join(self._cells), 0, Locator()))
+            # ` | `-separated like docx, pptx and sheet rows. A tab was the old
+            # separator, and most tokenizers read a tab as a plain space, so cell
+            # boundaries -- and every empty cell -- vanished from the embedding.
+            row = 0 if self._first_row else -1
+            self._first_row = False
+            self.out.append(Block("table_row", " | ".join(self._cells), 0, Locator(row=row)))
         self._cells = []
         self._col = 0
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in _SKIP:
-            self._skip = max(0, self._skip - 1)
-            return
         if self._skip:
+            if tag in _SKIP or tag == self._hidden_tag:
+                self._skip -= 1
+                if not self._skip:
+                    self._hidden_tag = ""
+                    if self._math:
+                        self._finish_math()
+            elif self._annotation is not None and tag == "annotation":
+                self._math_text = "".join(self._annotation).strip()
+                self._annotation = None
             return
         if tag not in _VOID and self._open.get(tag):
             # Tolerate mis-nesting: unwind to the most recent matching open tag rather
@@ -1205,6 +1335,7 @@ class _HtmlBlocks(HTMLParser):
                     self._span,
                     self._rowspan,
                     self._fragments,
+                    self._first_row,
                 ) = self._frames.pop()
                 if self._in_cell and self._text:
                     # A table is block-level, so the text either side of it is not one
@@ -1220,31 +1351,70 @@ class _HtmlBlocks(HTMLParser):
             # `</li>` inside a cell end a line of that cell, nothing more.
             self._flush_cell_fragment()
             return
+        if self._heading and tag in _BLOCK:
+            return  # see the start-tag half: a block tag inside a heading is a space
         if tag == "pre":
             self._flush(collapse=False)
             return
-        if tag in ("li",):
+        if tag == "li":
             self._flush("list_item")
+            self._marker = ""
+            return
+        if tag in ("ul", "ol"):
+            self._flush()
+            if self._lists:
+                self._lists.pop()
+            return
+        if tag == "dt":
+            self._flush("term")
             return
         if tag in _BLOCK:
             self._flush()
 
     def handle_data(self, data: str) -> None:
         if self._skip:
+            if self._hidden_tag:
+                self.hidden_chars += len(data)
+            elif self._annotation is not None:
+                self._annotation.append(data)
             # Counted, because an unclosed skip element swallows everything after it and
             # a browser does the same -- but a browser is not building somebody's index.
             self.skipped_chars += len(data)
             return
         self._text.append(data)
+        if (
+            len(self._text) > _MAX_TEXT_PIECES
+            and not (self._heading or self._cell_depth or self._in_row)
+            and not self._open.get("pre")
+        ):
+            # A page of inline tags and no block ones was one paragraph held whole:
+            # 20 MB of `<span>`s peaked at 213 MB with its first chunk at end of file.
+            self._flush("list_item" if self._open.get("li") else "paragraph")
+
+    def _finish_math(self) -> None:
+        if self._annotation is not None:
+            self._math_text = "".join(self._annotation).strip()
+            self._annotation = None
+        if self._math_text:
+            self._text.append(self._math_text)
+        else:
+            self.math_without_text += 1
+        self._math = False
+        self._math_text = ""
 
     def close(self) -> None:  # type: ignore[override]
         super().close()
+        if self._math:
+            self._finish_math()
         if self._in_row:
             # A file that simply stops inside a table -- truncated downloads do this
             # constantly -- otherwise loses the last row, which is now held in the
             # cell rather than already loose in `self.out`.
             self._close_row()
-        self._flush()
+        self._flush(collapse=not self._open.get("pre"))
+        if self._term is not None:
+            self.out.append(Block("paragraph", self._term, 0, Locator()))
+            self._term = None
         # `<style>` with no `</style>` leaves `_skip` above zero for the rest of the
         # document, so every remaining byte goes to `handle_data` and is dropped. On a
         # mid-body occurrence the caller gets *one* chunk -- enough that no error fires
@@ -1302,8 +1472,17 @@ class _HtmlBlocks(HTMLParser):
 _MAX_PENDING_CHARS = 1 << 23
 
 
+#: Text pieces one block may gather before it is flushed mid-paragraph. One piece is
+#: the text between two tags, so this is tens of KB of prose, not a limit any real
+#: paragraph meets.
+_MAX_TEXT_PIECES = 4096
+
+
 def iter_html_blocks(
-    handle: IO[bytes], report: Diagnostics, chunk_bytes: int = 1 << 16
+    handle: IO[bytes],
+    report: Diagnostics,
+    chunk_bytes: int = 1 << 16,
+    encoding: str | None = None,
 ) -> Iterator[Block]:
     """Stream HTML as blocks, feeding the parser a piece at a time.
 
@@ -1335,7 +1514,11 @@ def iter_html_blocks(
 
     parser = _HtmlBlocks()
     first = handle.read(chunk_bytes)
-    encoding, _ = _pick_encoding(first, report, partial_tail=True)
+    if encoding is None:
+        # A caller that already decoded the markup passes its encoding: sniffing
+        # re-encoded UTF-8 let a stale `<meta charset=windows-1252>` win, and an
+        # email body past 64 KiB came back as `CafÃ©`.
+        encoding, _ = _pick_encoding(first, report, partial_tail=True)
     decoder = codecs.getincrementaldecoder(encoding)(errors="replace")
     # `ignore` drops exactly the byte sequences `replace` turns into U+FFFD and
     # differs from it in nothing else, so the gap between their outputs is the number
@@ -1386,11 +1569,20 @@ def iter_html_blocks(
     _report_loss(report, "undecodable_bytes", replaced, _UNDECODABLE)
     if parser.unclosed_skip:
         report.truncate(
-            f"unclosed_element: a script/style/svg/math/template tag was never closed, "
+            f"unclosed_element: a script/style/svg/math/template or hidden tag "
+            f"was never closed, "
             f"so the {parser.skipped_chars:,} characters after it were read as its "
             f"content and are not in the output. Where the element was meant to end "
             f"cannot be recovered -- a browser drops the same text"
         )
+    if parser.math_without_text:
+        report.truncate(
+            f"math_without_text={parser.math_without_text}: MathML expressions had no "
+            f"authored alttext, aria-label or TeX/plain-text annotation; their "
+            f"presentation trees were not converted"
+        )
+    if parser.hidden_chars:
+        report.notes.append(f"hidden_chars={parser.hidden_chars} (hidden UI content removed)")
     if parser.span_cells_capped:
         report.truncate(
             f"table_span_expansion_capped={parser.span_cells_capped} cell(s): this "
@@ -1584,7 +1776,7 @@ def _decode_part(raw: bytes, part: object, report: Diagnostics) -> str:
 def _html_blocks_of(content: str, report: Diagnostics) -> list[Block]:
     import io
 
-    return list(iter_html_blocks(io.BytesIO(content.encode("utf-8")), report))
+    return list(iter_html_blocks(io.BytesIO(content.encode("utf-8")), report, encoding="utf-8"))
 
 
 def _visible_chars(blocks: list[Block]) -> int:
@@ -1604,13 +1796,13 @@ def _headers_size(part: object) -> int:
 
 
 def _part_size(part: object, depth: int = 0) -> int:
-    """Bytes of a part's payload, measured **without decoding it**.
+    """Estimated bytes of a part's payload, without decoding it.
 
     ``get_payload(decode=True)`` returns ``None`` rather than raising for a
     ``message/rfc822`` part, so ``len(... or b"")`` reported every forwarded mail as
     0 bytes -- a number a caller cannot act on and cannot tell from an empty file.
 
-    This number exists only to print ``(application/pdf, 4831202 bytes)`` in a
+    This number exists only to print an estimated payload size in a
     diagnostic about a part diceo deliberately **does not** extract, and it was
     base64-decoding that part in full to get it -- and, for multipart, re-serialising
     every child with ``as_bytes()``. Measured on a 160 MB mail carrying a 120 MB
@@ -1619,10 +1811,9 @@ def _part_size(part: object, depth: int = 0) -> int:
     Computing it from the *encoded* payload instead costs nothing measurable: 984 MB,
     unchanged from the parse.
 
-    Base64 carries three bytes per four characters and the line breaks are not
-    payload, which is exact. Quoted-printable is over-counted, and that is the right
-    trade for a figure whose only job is to tell a caller whether the part is worth
-    fetching.
+    Base64 carries at most three bytes per four characters, excluding line breaks;
+    padding can over-count by two bytes. Quoted-printable is also over-counted.
+    Diagnostics label the estimate instead of claiming an exact decoded count.
 
     None of this makes mail *streamed*. ``message_from_binary_file`` materialises the
     whole message -- the 984 MB above is 6.1x the file, and it is the stdlib parser,
@@ -1802,7 +1993,8 @@ def _attachment_line(part: object) -> str:
     """The one thing a caller needs to fetch a part diceo deliberately left out."""
     return (
         f"attachment={part.get_filename() or '(unnamed)'} "  # type: ignore[attr-defined]
-        f"({part.get_content_type()}, {_part_size(part)} bytes) -- "  # type: ignore[attr-defined]
+        f"({part.get_content_type()}, {_part_size(part)} bytes "  # type: ignore[attr-defined]
+        f"estimated from encoded payload) -- "
         f"not extracted; diceo's unit of work is one document"
     )
 
@@ -1857,7 +2049,8 @@ def _iter_leaf(
         yield from blocks
         return
     report.truncate(
-        f"unreferenced_part=(inline) ({kind}, {_part_size(part)} bytes) -- not "
+        f"unreferenced_part=(inline) ({kind}, {_part_size(part)} bytes "
+        f"estimated from encoded payload) -- not "
         f"extracted; it is neither the body nor an attachment"
     )
 
@@ -1884,7 +2077,8 @@ def _iter_forwarded(
     size = _part_size(part)
     if inner is None:
         report.truncate(
-            f"forwarded_message_unreadable ({size} bytes) -- a message/rfc822 part "
+            f"forwarded_message_unreadable ({size} bytes estimated from encoded payload) -- "
+            f"a message/rfc822 part "
             f"with no message in it"
         )
         return
@@ -1892,10 +2086,13 @@ def _iter_forwarded(
     if depth >= _RFC822_MAX_DEPTH:
         report.truncate(
             f"rfc822_depth_exceeded={depth + 1} (forwarded message '{subject}', "
-            f"{size:,} bytes, not read)"
+            f"{size:,} bytes estimated from encoded payload, not read)"
         )
         return
-    report.notes.append(f"forwarded_message={subject} ({size:,} bytes, read inline)")
+    report.notes.append(
+        f"forwarded_message={subject} ({size:,} bytes estimated from encoded payload, "
+        f"read inline)"
+    )
     yield from _iter_message(inner, report, used, depth + 1)
 
 
@@ -1947,10 +2144,15 @@ def _iter_message(
         accounted += len(body.blocks)
         yield from body.blocks
     elif body.part is not None:
-        report.chars += len(body.text)
+        # Not counted into `report.chars` here: the reader below counts what it
+        # decodes, and counting both doubled every body.
         stream = io.BytesIO(body.text.encode("utf-8"))
-        reader = iter_html_blocks if body.subtype == "html" else iter_text_blocks
-        for block in reader(stream, report):
+        blocks = (
+            iter_html_blocks(stream, report, encoding="utf-8")
+            if body.subtype == "html"
+            else iter_text_blocks(stream, report)
+        )
+        for block in blocks:
             accounted += 1
             yield block
 
@@ -1998,7 +2200,7 @@ def iter_email_blocks(handle: IO[bytes], report: Diagnostics) -> Iterator[Block]
     and extracting it here would make one call do unbounded work. But a mail whose
     only content is its attachment must not look like an empty success -- that is
     the exact failure rule 3 exists for. So every attachment lands in
-    ``diagnostics.truncated`` with its name, type and size, and
+    ``diagnostics.truncated`` with its name, type and estimated payload size, and
     ``diagnostics.lost_data`` is True. The caller can then feed the bytes back in::
 
         import email, diceo

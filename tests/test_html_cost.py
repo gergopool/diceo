@@ -320,11 +320,10 @@ def test_optional_end_tags_are_not_treated_as_an_attack() -> None:
 
     assert report.truncated == []
     assert len(blocks) == 20_000
-    assert blocks[0] == ("list_item", "Item 0")
-    # The last item is flushed by `</ul>` rather than by the next `<li>`, which is why
-    # it is a paragraph. Unchanged by any of this, and asserted so that a future reader
-    # does not take the count above for a rounding error.
-    assert blocks[-1] == ("paragraph", "Item 19999")
+    assert blocks[0] == ("list_item", "- Item 0")
+    # The last item is flushed by `</ul>` rather than by the next `<li>`. It used to
+    # come out as a paragraph for that reason; the item's marker now decides.
+    assert blocks[-1] == ("list_item", "- Item 19999")
 
 
 def test_nested_tables_still_keep_their_frames() -> None:
@@ -332,7 +331,7 @@ def test_nested_tables_still_keep_their_frames() -> None:
     a layout-nested table -- which is everywhere on the web -- must still recover the
     outer row, with its cells under the columns they started in."""
     rows = [
-        text.split("\t")
+        text.split(" | ")
         for kind, text in _read(
             b"<table><tr><td>OUTER</td><td><table><tr><td>INNER</td></tr></table></td>"
             b"<td>LAST</td></tr></table>"
@@ -358,4 +357,4 @@ def test_a_healthy_page_gains_nothing_at_all() -> None:
     assert report.lost_data is False
     assert [note for note in report.notes if not note.startswith("title=")] == []
     assert ("heading", "Quarterly report") in blocks
-    assert ("table_row", "EMEA\t1200") in blocks
+    assert ("table_row", "EMEA | 1200") in blocks

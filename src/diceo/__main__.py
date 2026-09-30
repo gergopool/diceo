@@ -20,7 +20,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
 
 from diceo import Diagnostics, Limits, __version__, chunk, sniff
 from diceo.errors import DiceoError
@@ -58,7 +57,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "what."
         ),
     )
-    parser.add_argument("files", nargs="*", type=Path, help="documents to process")
+    parser.add_argument("files", nargs="*", help="document paths or HTTP(S) URLs to process")
     parser.add_argument("--version", action="version", version=f"diceo {__version__}")
 
     output = parser.add_mutually_exclusive_group()
@@ -105,6 +104,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="stop after this many rows per sheet (reported as a truncation)",
     )
     parser.add_argument(
+        "--download-timeout",
+        type=float,
+        default=DEFAULTS.download_timeout,
+        metavar="SECONDS",
+        help="socket timeout for URL downloads (default 30)",
+    )
+    parser.add_argument(
+        "--max-download-bytes",
+        type=int,
+        default=DEFAULTS.max_download_bytes,
+        metavar="N",
+        help="maximum URL body size (default 128 MiB)",
+    )
+    parser.add_argument(
         "--meta",
         action="append",
         default=[],
@@ -140,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
             overlap_chars=args.overlap,
             max_pages=args.max_pages,
             max_rows=args.max_rows,
+            download_timeout=args.download_timeout,
+            max_download_bytes=args.max_download_bytes,
         )
     except ValueError as exc:
         print(f"diceo: {exc}", file=sys.stderr)
@@ -154,10 +169,10 @@ def main(argv: list[str] | None = None) -> int:
     for path in args.files:
         if args.sniff:
             try:
-                print(f"{path}\t{sniff(path)}")
+                print(f"{path}\t{sniff(path, limits=limits)}")
             except DiceoError as exc:
                 print(f"{path}\t{exc.reason}", file=sys.stderr)
-                status = max(status, EXIT_FAILED)
+                status = EXIT_FAILED
             continue
 
         report = Diagnostics()
@@ -175,14 +190,14 @@ def main(argv: list[str] | None = None) -> int:
                     # size and the spaces are 8% of it.
                     print(
                         json.dumps(
-                            {"text": piece.text, **piece.meta},
+                            {**piece.meta, "text": piece.text},
                             ensure_ascii=False,
                             separators=(",", ":"),
                         )
                     )
         except DiceoError as exc:
             print(f"diceo: {exc}", file=sys.stderr)
-            status = max(status, EXIT_FAILED)
+            status = EXIT_FAILED
             continue
         except KeyboardInterrupt:  # pragma: no cover
             return 130
@@ -207,7 +222,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"{path}: {json.dumps(report.as_dict(), ensure_ascii=False)}", file=sys.stderr
             )
         if report.lost_data:
-            status = max(status, EXIT_INCOMPLETE)
+            if status != EXIT_FAILED:
+                status = EXIT_INCOMPLETE
             if not args.diagnostics:
                 # Never silent: the whole point of the package is that you find out.
                 for what in report.truncated:

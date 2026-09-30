@@ -32,7 +32,7 @@ def _rows(html: str) -> list[list[str]]:
     import io
 
     blocks = list(iter_html_blocks(io.BytesIO(html.encode()), Diagnostics()))
-    return [b.text.split("\t") for b in blocks if b.kind == "table_row"]
+    return [b.text.split(" | ") for b in blocks if b.kind == "table_row"]
 
 
 # --------------------------------------------------------------------------- #
@@ -190,6 +190,6 @@ def test_a_grouped_header_table_end_to_end(tmp_path):
 
     text = "\n".join(piece.text for piece in diceo.chunk(path))
 
-    assert "Region\t2023\t2023\t2024\t2024" in text
-    assert "Region\tH1\tH2\tH1\tH2" in text
-    assert "EMEA\t46\t91\t77\t70" in text
+    assert "Region | 2023 | 2023 | 2024 | 2024" in text
+    assert "Region | H1 | H2 | H1 | H2" in text
+    assert "EMEA | 46 | 91 | 77 | 70" in text

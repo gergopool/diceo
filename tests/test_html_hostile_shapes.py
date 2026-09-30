@@ -49,7 +49,7 @@ def _read(html: str) -> tuple[list[tuple[str, str]], Diagnostics]:
 
 
 def _rows(html: str) -> list[list[str]]:
-    return [text.split("\t") for kind, text in _read(html)[0] if kind == "table_row"]
+    return [text.split(" | ") for kind, text in _read(html)[0] if kind == "table_row"]
 
 
 # --------------------------------------------------------------------------- #
@@ -201,7 +201,7 @@ def test_a_document_under_the_budget_is_untouched():
     blocks, report = _read(f"<table><tr>{cells}</tr></table>")
 
     assert report.truncated == []
-    assert len(blocks[0][1].split("\t")) == 300 * 64
+    assert len(blocks[0][1].split(" | ")) == 300 * 64
 
 
 def test_ordinary_spans_are_still_honoured():
@@ -321,7 +321,7 @@ def test_a_healthy_page_gains_nothing_at_all():
     assert report.truncated == []
     assert report.lost_data is False
     assert ("heading", "Quarterly report") in blocks
-    assert ("table_row", "EMEA\t1200") in blocks
+    assert ("table_row", "EMEA | 1200") in blocks
 
 
 def test_a_realistic_page_gains_only_its_title():

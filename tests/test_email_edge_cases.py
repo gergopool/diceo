@@ -16,7 +16,8 @@ tightening a header-name list is tunable rather than solvable.
 from __future__ import annotations
 
 import io
-from email.message import EmailMessage
+import re
+from email.message import EmailMessage, Message
 
 import pytest
 
@@ -85,6 +86,33 @@ def test_a_real_email_is_still_detected(tmp_path):
     assert report.format == "eml"
     assert "Q3 contract" in text
     assert "penalty clause was removed" in text
+
+
+@pytest.mark.parametrize("cte", ["quoted-printable", "base64"])
+def test_ignored_attachment_sizes_are_estimates_without_decoding(cte, monkeypatch):
+    message = EmailMessage()
+    message["From"] = "alice@example.com"
+    message["To"] = "bob@example.com"
+    message["Subject"] = "Attachment budget"
+    message.set_content("Authored body remains available.")
+    payload = b"=hello\xff!\r\n"
+    message.add_attachment(
+        payload, maintype="application", subtype="octet-stream", filename="payload.bin", cte=cte
+    )
+    raw = message.as_bytes()
+    get_payload = Message.get_payload
+
+    def forbid_attachment_decode(self, i=None, decode=False):
+        if decode and self.get_filename():
+            raise AssertionError("ignored attachments must not be decoded for sizing")
+        return get_payload(self, i=i, decode=decode)
+
+    monkeypatch.setattr(Message, "get_payload", forbid_attachment_decode)
+    text, report = _read(raw)
+    assert "Authored body remains available." in text and report.lost_data
+    diagnostic = next(line for line in report.truncated if "attachment=payload.bin" in line)
+    match = re.search(r"(\d+) bytes estimated from encoded payload", diagnostic)
+    assert match and int(match.group(1)) > len(payload)
 
 
 @pytest.mark.parametrize(

@@ -37,6 +37,7 @@ from diceo.errors import (
     SourceNotSeekable,
     UnsupportedFormat,
 )
+from diceo.types import Limits
 
 #: Everything :func:`diceo.chunk` accepts. Ordered as a human would list them.
 #:
@@ -263,6 +264,9 @@ class Source:
     to ``.xlsx`` is a fact about the corpus, and the only place it is visible is here
     -- the chunks themselves look perfectly healthy (rule 3)."""
 
+    url: str = ""
+    encoding: str | None = None
+
     @property
     def backend_arg(self) -> Path | IO[bytes]:
         """Whatever this source should be handed to a reader as."""
@@ -299,13 +303,20 @@ def _describe_file_type(mode: int) -> str:
 @contextmanager
 def open_source(
     source: str | Path | bytes | bytearray | memoryview | IO[bytes],
+    *,
+    download_timeout: float = 30.0,
+    max_download_bytes: int = 128 * 1024**2,
 ) -> Iterator[Source]:
     """Normalise anything a caller might pass into a :class:`Source`.
 
-    Accepts a path, raw ``bytes``, or a binary file object. A file object must be
+    Accepts an HTTP(S) URL, path, raw ``bytes``, or a binary file object. A file object must be
     seekable, and the error explains why in terms of the file formats rather than
     our implementation -- see :class:`~diceo.errors.SourceNotSeekable`.
     """
+    if isinstance(source, str) and source[:8].lower().startswith(("https://", "http://")):
+        with _url_source(source, download_timeout, max_download_bytes) as remote:
+            yield remote
+        return
     if isinstance(source, str | Path):
         path = Path(source)
         # Stat *before* opening. `open("rb")` on a FIFO blocks until a writer
@@ -359,6 +370,10 @@ def open_source(
         except PermissionError as exc:
             raise DocumentNotFound(
                 "not readable (permission denied)", source=str(path)
+            ) from exc
+        except OSError as exc:
+            raise DocumentNotFound(
+                f"cannot be opened ({exc.strerror})", source=str(path)
             ) from exc
         try:
             # Reuse the stat result that established this is a regular file. `size`
@@ -416,6 +431,157 @@ def open_source(
             f"{name}: the stream reports itself seekable but seeking failed ({exc})"
         ) from exc
     yield Source(name=name, handle=source, size=size)
+
+
+@contextmanager
+def _url_source(url: str, timeout: float, max_bytes: int) -> Iterator[Source]:
+    """Fetch one document with stdlib only; local inputs import no HTTP machinery."""
+    import gzip
+    import http.client
+    import tempfile
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    import zlib
+
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        _ = parsed.port  # validate an explicitly supplied port before making a request
+    except ValueError as exc:
+        raise UnsupportedFormat(f"invalid HTTP(S) URL ({exc})", source=url) from exc
+    if not parsed.hostname or parsed.username is not None or parsed.password is not None:
+        raise UnsupportedFormat(
+            "pass an HTTP(S) URL with a host and no embedded credentials", source=url
+        )
+
+    class Redirects(urllib.request.HTTPRedirectHandler):
+        def http_error_302(self, req, fp, code, msg, headers):
+            # urllib otherwise drains each redirect body with an unbounded read.
+            # Keep its redirect/loop handling, but discard that body without reading.
+            fp.close()
+            return super().http_error_302(req, io.BytesIO(), code, msg, headers)
+
+        http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            target = urllib.parse.urlsplit(newurl)
+            if (
+                target.scheme not in ("http", "https")
+                or not target.hostname
+                or target.username is not None
+                or target.password is not None
+            ):
+                raise UnsupportedFormat("redirect is not an HTTP(S) document URL", source=url)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "diceo/0.1 (+https://github.com/gergopool/diceo)",
+            "Accept-Encoding": "identity",
+        },
+    )
+    # Seekability is required by PDF/ZIP readers. Spill large downloads to disk rather
+    # than retaining a second whole document in Python memory; close on every exit.
+    with tempfile.SpooledTemporaryFile(max_size=1024**2, mode="w+b") as handle:
+        try:
+            with urllib.request.build_opener(Redirects()).open(
+                request, timeout=timeout
+            ) as response:
+                final_url = response.geturl()
+                media = response.headers.get_content_type()
+                charset = response.headers.get_content_charset()
+                filename = response.headers.get_filename()
+                declared = response.headers.get("Content-Length")
+                if declared and int(declared) > max_bytes:
+                    raise CorruptDocument(
+                        f"download exceeds max_download_bytes={max_bytes}", source=url
+                    )
+                encoding = response.headers.get("Content-Encoding", "identity").lower()
+                if encoding not in ("identity", "gzip"):
+                    raise UnsupportedFormat(
+                        f"unsupported HTTP content encoding {encoding!r}", source=url
+                    )
+                wire_size = 0
+
+                class WireLimit:
+                    def read(self, count=-1):
+                        nonlocal wire_size
+                        count = min(
+                            count if count >= 0 else 64 * 1024, max_bytes - wire_size + 1
+                        )
+                        piece = response.read(count)
+                        wire_size += len(piece)
+                        if wire_size > max_bytes:
+                            raise CorruptDocument(
+                                f"download exceeds max_download_bytes={max_bytes}", source=url
+                            )
+                        return piece
+
+                body = gzip.GzipFile(fileobj=WireLimit()) if encoding == "gzip" else response
+                size = 0
+                while piece := body.read(min(64 * 1024, max_bytes - size + 1)):
+                    size += len(piece)
+                    if size > max_bytes:
+                        raise CorruptDocument(
+                            f"download exceeds max_download_bytes={max_bytes}", source=url
+                        )
+                    handle.write(piece)
+                if body is not response:
+                    body.close()
+                if encoding == "identity" and declared and size != int(declared):
+                    raise CorruptDocument(
+                        "HTTP response ended before its declared length", source=url
+                    )
+        except (
+            urllib.error.URLError,
+            OSError,
+            ValueError,
+            EOFError,
+            http.client.HTTPException,
+            zlib.error,
+        ) as exc:
+            if isinstance(exc, urllib.error.HTTPError):
+                exc.close()
+            if isinstance(exc, (CorruptDocument, UnsupportedFormat)):
+                raise
+            raise DocumentNotFound(f"cannot download ({exc})", source=url) from exc
+        handle.seek(0)
+        name = Path(urllib.parse.unquote(urllib.parse.urlsplit(final_url).path)).name
+        known_suffixes = (
+            _TEXT_SUFFIXES
+            | _HTML_SUFFIXES
+            | _CONTAINER_SUFFIXES
+            | {".pdf", ".csv", ".tsv", ".eml", ".mht", ".mhtml"}
+        )
+        if filename and Path(name).suffix.lower() not in known_suffixes:
+            name = filename.replace("\\", "/").rsplit("/", 1)[-1]
+            name = "".join(c for c in name if ord(c) >= 32 and ord(c) != 127)
+        if not name:
+            name = parsed.hostname
+        if media in ("text/html", "application/xhtml+xml"):
+            if Path(name).suffix.lower() not in (".html", ".htm", ".xhtml"):
+                name += ".html"
+        elif Path(name).suffix.lower() not in known_suffixes:
+            suffix = {
+                "text/html": ".html",
+                "application/xhtml+xml": ".html",
+                "application/pdf": ".pdf",
+                "text/csv": ".csv",
+                "text/plain": ".txt",
+                "application/vnd.ms-excel": ".xls",
+                "application/vnd.ms-excel.sheet.binary.macroenabled.12": ".xlsb",
+                "application/vnd.oasis.opendocument.spreadsheet": ".ods",
+            }.get(media, "")
+            name += suffix
+        yield Source(
+            name=name,
+            handle=handle,
+            size=size,
+            url=final_url,
+            encoding=charset if media in ("text/html", "application/xhtml+xml") else None,
+            notes=[f"source_url={final_url}"],
+        )
 
 
 def _zip_format(src: Source, head: bytes) -> str:
@@ -880,7 +1046,7 @@ def _is_probably_text(head: bytes) -> bool:
     return control / max(len(head), 1) < 0.05
 
 
-def sniff(source: str | Path | bytes | IO[bytes]) -> str:
+def sniff(source: str | Path | bytes | IO[bytes], *, limits: Limits | None = None) -> str:
     """Identify a document's format. Content wins over the file name.
 
     >>> from diceo import sniff
@@ -891,5 +1057,13 @@ def sniff(source: str | Path | bytes | IO[bytes]) -> str:
     :class:`~diceo.errors.UnsupportedFormat` for a format we can name but not
     read, with a message that says what it is and what to do about it.
     """
-    with open_source(source) as src:
+    options = (
+        {}
+        if limits is None
+        else {
+            "download_timeout": limits.download_timeout,
+            "max_download_bytes": limits.max_download_bytes,
+        }
+    )
+    with open_source(source, **options) as src:
         return detect(src)

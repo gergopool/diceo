@@ -249,10 +249,10 @@ def test_a_mid_row_span_keeps_every_later_value_under_its_own_header(tmp_path: P
 
 def test_an_ordinary_table_is_untouched(tmp_path: Path) -> None:
     """The control. A table with no `w:gridSpan` anywhere -- which is every table in
-    the 51 real DOCX in the research corpus -- must come out exactly as it did, and the
-    new
-    counter must stay at zero. A diagnostic that fires on healthy input is one a
-    caller learns to ignore inside a day."""
+    the 51 real DOCX in the research corpus -- and the counter must stay at zero. The
+    two-paragraph cell is one field: it used to be two, and 12.4 had no header. A
+    diagnostic that fires on healthy input is one a caller learns to ignore inside a
+    day."""
     texts, report = _read(
         tmp_path,
         "<w:tbl>"
@@ -263,15 +263,14 @@ def test_an_ordinary_table_is_untouched(tmp_path: Path) -> None:
         "<w:tc><w:p><w:r><w:t>12.4</w:t></w:r></w:p></w:tc></w:tr>"
         "</w:tbl>",
     )
-    assert texts == ["Region | 2024", "North | and islands | 12.4"]
+    assert texts == ["Region | 2024", "North and islands | 12.4"]
     assert report.merged_cells_expanded == 0
     assert report.symbols_flattened == 0
 
 
 def test_an_explicit_span_of_one_changes_nothing(tmp_path: Path) -> None:
     """`w:gridSpan w:val="1"` is a cell that covers its own column, which is what an
-    unmarked cell does. The multi-paragraph cell is the tell: expanding it would
-    collapse its two paragraphs into one field and move output on a healthy table."""
+    unmarked cell does, so it is read exactly like one and counted as no merge."""
     texts, report = _read(
         tmp_path,
         "<w:tbl><w:tr>"
@@ -281,7 +280,7 @@ def test_an_explicit_span_of_one_changes_nothing(tmp_path: Path) -> None:
         "<w:tc><w:p><w:r><w:t>12.4</w:t></w:r></w:p></w:tc>"
         "</w:tr></w:tbl>",
     )
-    assert texts == ["North | and islands | 12.4"]
+    assert texts == ["North and islands | 12.4"]
     assert report.merged_cells_expanded == 0
 
 

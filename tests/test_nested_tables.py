@@ -23,6 +23,7 @@ import io
 import zipfile
 from pathlib import Path
 
+import diceo
 from diceo.ooxml import OoxmlDiagnostics, iter_docx_blocks
 from diceo.plaintext import iter_html_blocks
 from diceo.types import Diagnostics
@@ -210,7 +211,7 @@ def test_html_keeps_the_outer_row(tmp_path):
     rows = _html_rows(_NESTED_HTML)
     joined = "\n".join(rows)
 
-    assert "INNER A\tINNER B" in rows, rows
+    assert "INNER A | INNER B" in rows, rows
     for text in ("OUTER 1", "OUTER 2", "OUTER 3", "ROW2 A", "ROW2 B"):
         assert text in joined, f"{text!r} vanished: {rows}"
 
@@ -226,10 +227,28 @@ def test_html_outer_row_is_not_cut_in_half():
 def test_html_second_row_survives():
     rows = _html_rows(_NESTED_HTML)
 
-    assert any(r == "ROW2 A\tROW2 B" for r in rows), rows
+    assert any(r == "ROW2 A | ROW2 B" for r in rows), rows
 
 
 def test_html_flat_table_unchanged():
     rows = _html_rows("<table><tr><td>a</td><td>b</td></tr></table>")
 
-    assert rows == ["a\tb"]
+    assert rows == ["a | b"]
+
+
+def test_nested_html_restores_the_outer_header():
+    html = (
+        "<table><tr><th>Outer header</th><th>Context"
+        "<table><tr><th>Inner header</th></tr><tr><td>Inner value</td></tr></table>"
+        "</th></tr>"
+        + "".join(f"<tr><td>Outer value {i}</td><td>42</td></tr>" for i in range(8))
+        + "</table>"
+    ).encode()
+    rows = [b for b in diceo.extract(html, name="nested.html") if b.kind == "table_row"]
+    outer = next(row for row in rows if "Outer header" in row.text)
+    assert outer.locator.row == 0
+    chunks = list(diceo.chunk(html, name="nested.html", limits=diceo.Limits(target_chars=40)))
+    values = [c.text for c in chunks if "Outer value 7" in c.text]
+    assert values and all(
+        "Outer header" in text and "Inner header" not in text for text in values
+    )
