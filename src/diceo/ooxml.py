@@ -73,7 +73,7 @@ from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
-from xml.etree.ElementTree import Element, XMLPullParser, iterparse
+from xml.etree.ElementTree import Element, ParseError, XMLPullParser, iterparse
 
 from diceo._zip_parts import MAX_DEPTH as _MAX_DEPTH
 from diceo._zip_parts import MAX_OPEN_ELEMENTS as _MAX_OPEN_ELEMENTS
@@ -84,11 +84,9 @@ from diceo._zip_parts import dtd_free_stream as _dtd_free_stream
 from diceo._zip_parts import refuse_dtd as _refuse_dtd
 from diceo._zip_parts import refuse_shape as _refuse_shape
 
-#: A chart's own part, and SmartArt's. **Counted, never opened.** A deck whose numbers
-#: live in a chart -- which is what a chart is for -- indexes as an empty slide, and
-#: `media_parts` does not see it because a chart is not a raster part. Reading them
-#: would change chunk text, which is rule 4's decision and not this module's; saying
-#: they are there is rule 3's, and that one is unconditional.
+#: A chart's own part, and SmartArt's. Both are counted: raster counts cannot see
+#: them. PPTX also reads authored SmartArt lists; arbitrary diagram layouts and
+#: chart values remain outside the text path.
 _CHART_PART = re.compile(r"(word|xl|ppt)/charts/chart\d*\.xml$", re.IGNORECASE)
 _SMARTART_PART = re.compile(r"(word|xl|ppt)/diagrams/data\d*\.xml$", re.IGNORECASE)
 
@@ -162,6 +160,10 @@ _A_T = _A + "t"
 _A_TBL = _A + "tbl"
 _A_TR = _A + "tr"
 _A_TC = _A + "tc"
+_DGM = "{http://schemas.openxmlformats.org/drawingml/2006/diagram}"
+_DGM_RELIDS = _DGM + "relIds"
+_DGM_PT = _DGM + "pt"
+_DGM_CXN = _DGM + "cxn"
 #: `<p:sld show="0">` -- a slide the presenter chose not to show, which in practice
 #: is routinely a superseded draft. Still indexed (rule 3 forbids dropping content)
 #: but counted, the way hidden *sheets* already are, so a caller can decide.
@@ -271,7 +273,9 @@ _W_END_TAGS = _W_TEXT_TAGS | {
 }
 #: The same gate for the slide reader's start branch.
 _PPTX_START_TAGS = (
-    _SLD_TAGS | _SP_TAGS | {_A_TBL, _A_TR, _A_TC, _MC_ALTERNATE, _MC_CHOICE, _MC_FALLBACK}
+    _SLD_TAGS
+    | _SP_TAGS
+    | {_A_TBL, _A_TR, _A_TC, _MC_ALTERNATE, _MC_CHOICE, _MC_FALLBACK, _DGM_RELIDS}
 )
 
 DOCX_PART = "word/document.xml"
@@ -385,12 +389,13 @@ class OoxmlDiagnostics:
     notes_slides: int = 0
     media_parts: int = 0
     media_bytes: int = 0
-    #: `charts/chart1.xml` and `diagrams/data1.xml` parts. Counted, not opened; see
-    #: `_CHART_PART`. A note rather than a truncation, because a chart is a *rendering*
+    #: `charts/chart1.xml` and `diagrams/data1.xml` parts. Counted even when authored
+    #: SmartArt list text can be read. A note rather than a truncation: a *rendering*
     #: of numbers that are usually also in a table on the same slide -- firing
     #: `lost_data` on every deck with a chart would train a caller to ignore it.
     charts: int = 0
     smartart: int = 0
+    smartart_texts: int = 0
     unresolved_list_markers: int = 0
     #: Slide numbers carrying ``show="0"``. Indexed anyway; see `_SLD_TAGS`.
     slides_hidden: list[int] = field(default_factory=list)
@@ -715,7 +720,7 @@ class _Para:
 
 
 def count_media(archive: zipfile.ZipFile, report: OoxmlDiagnostics) -> None:
-    """Count the parts diceo does not read: images, then charts and SmartArt.
+    """Count images, charts and SmartArt, including diagrams with readable text.
 
     This existed for ``ppt/media/`` only, so a Word report with seven charts and an
     Excel workbook with one both reported **nothing** -- and `lost_data` stayed False.
@@ -1582,8 +1587,10 @@ def _slide_order(
     return ordered, orphans
 
 
-def _notes_for(archive: zipfile.ZipFile, slide: str) -> str | None:
-    """The notes part a slide points at, via that slide's own relationships."""
+def _related_part(
+    archive: zipfile.ZipFile, slide: str, kind: str, identifier: str | None = None
+) -> str | None:
+    """A slide's own related part; external relationships are never followed."""
     rels_name = posixpath.join(
         posixpath.dirname(slide), "_rels", posixpath.basename(slide) + ".rels"
     )
@@ -1594,8 +1601,13 @@ def _notes_for(archive: zipfile.ZipFile, slide: str) -> str | None:
     from xml.etree.ElementTree import fromstring
 
     _refuse_dtd(raw, name=archive.filename or "", part=rels_name)
+    suffix = "/" + kind
     for relationship in fromstring(raw):
-        if relationship.get("Type", "").endswith("/notesSlide"):
+        if (
+            relationship.get("Type", "").endswith(suffix)
+            and relationship.get("TargetMode") != "External"
+            and (identifier is None or relationship.get("Id") == identifier)
+        ):
             target = relationship.get("Target", "")
             return (
                 target[1:]
@@ -1603,6 +1615,95 @@ def _notes_for(archive: zipfile.ZipFile, slide: str) -> str | None:
                 else posixpath.normpath(posixpath.join(posixpath.dirname(slide), target))
             )
     return None
+
+
+def _iter_smartart_text(
+    archive: zipfile.ZipFile, slide: str, identifier: str, number: int, report: OoxmlDiagnostics
+) -> Iterator[Block]:
+    """Read a flat authored list, not cached presentation shapes or layout guesses.
+
+    NASA's two lists have shuffled connections; ``srcOrd`` matches their original
+    render. A complete flat list has an unambiguous text order. Other graphs remain
+    counted but unrepresented rather than inventing a visual reading order.
+    """
+    part = _related_part(archive, slide, "diagramData", identifier)
+    if not part:
+        report.parts_missing.append(f"{slide} <diagramData r:id={identifier or 'none'}>")
+        return
+    try:
+        stream = archive.open(part)
+    except _NOT_OUR_VERDICT:
+        report.parts_missing.append(part)
+        return
+    points: dict[str, list[str]] = {}
+    roots: list[str] = []
+    links: list[tuple[str, str, int]] = []
+    depth = elements = 0
+    valid = True
+    with stream:
+        guarded = _dtd_free_stream(stream, name=archive.filename or "", part=part)
+        for event, element in iterparse(guarded, ("start", "end")):
+            if event == "start":
+                depth += 1
+                elements += 1
+                # No reset: the ordered point/link buffer is bounded too.
+                if depth > _MAX_DEPTH or elements > _MAX_OPEN_ELEMENTS:
+                    _refuse_shape(depth, elements, name=archive.filename or "", part=part)
+                continue
+            depth -= 1
+            if element.tag == _DGM_PT:
+                model = element.get("modelId", "")
+                kind = element.get("type", "node")
+                if kind == "doc":
+                    roots.append(model)
+                elif kind == "node":
+                    if not model or model in points:
+                        valid = False
+                    body = element.find(_DGM + "t")
+                    points[model] = (
+                        []
+                        if body is None
+                        else [
+                            text
+                            for paragraph in body.iter(_A_P)
+                            if (
+                                text := " ".join(
+                                    "".join(
+                                        "\n" if node.tag == _A_BR else (node.text or "")
+                                        for node in paragraph.iter()
+                                        if node.tag in _A_TEXT_TAGS or node.tag == _A_BR
+                                    ).split()
+                                )
+                            )
+                        ]
+                    )
+                element.clear()
+            elif element.tag == _DGM_CXN:
+                if element.get("type", "parOf") == "parOf":
+                    try:
+                        ordinal = int(element.get("srcOrd", ""))
+                    except ValueError:
+                        valid = False
+                    else:
+                        links.append(
+                            (element.get("srcId", ""), element.get("destId", ""), ordinal)
+                        )
+                element.clear()
+    # ponytail: flat authored lists only; support other graphs after original-render evidence.
+    if (
+        not valid
+        or len(roots) != 1
+        or any(source != roots[0] or ordinal < 0 for source, _, ordinal in links)
+        or len({target for _, target, _ in links}) != len(links)
+        or len({ordinal for _, _, ordinal in links}) != len(links)
+        or {target for _, target, _ in links} != points.keys()
+    ):
+        return
+    for _, target, _ in sorted(links, key=lambda link: link[2]):
+        for text in points[target]:
+            report.smartart_texts += 1
+            report.paragraphs += 1
+            yield Block("paragraph", text, 0, number)
 
 
 def _iter_shape_text(
@@ -1680,6 +1781,17 @@ def _iter_shape_text(
                         fallbacks.append(True)
                     else:
                         fallbacks.append(False)
+                elif tag == _DGM_RELIDS and not skip:
+                    identifier = element.get(f"{{{_OFF_REL}}}dm", "")
+                    try:
+                        yield from _iter_smartart_text(
+                            archive, part, identifier, number, report
+                        )
+                    except (*_NOT_OUR_VERDICT, ParseError):
+                        # A damaged supporting diagram must not stop later slide text.
+                        report.parts_missing.append(
+                            f"{part} <unreadable diagramData {identifier}>"
+                        )
                 continue
 
             # --- end events ---
@@ -1793,7 +1905,7 @@ def iter_pptx_blocks(
                 produced += 1
                 yield block
             if include_notes:
-                notes_part = _notes_for(archive, name)
+                notes_part = _related_part(archive, name, "notesSlide")
                 if notes_part:
                     emitted = False
                     for block in _iter_shape_text(archive, notes_part, number, report):

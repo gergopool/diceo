@@ -286,8 +286,8 @@ def _ooxml_blocks(src: Source, kind: str, report: Diagnostics) -> Iterator[Block
             # index" is the only useful next question.
             report.truncate(
                 f"parts_missing={len(stats.parts_missing)} "
-                f"({bounded_list(stats.parts_missing)}): named in the "
-                f"package and not in it -- their content is absent from your index"
+                f"({bounded_list(stats.parts_missing)}): named by the "
+                f"package but unavailable -- their content is absent from your index"
             )
         if stats.slides_without_text:
             report.notes.append(f"slides_without_text={stats.slides_without_text}")
@@ -298,13 +298,10 @@ def _ooxml_blocks(src: Source, kind: str, report: Diagnostics) -> Iterator[Block
             # being counted, here it is the picture the caller does not have.
             report.notes.append(images_note(stats.media_parts))
         if stats.charts or stats.smartart:
-            # A chart is a rendering of numbers, and the numbers are in the chart's own
-            # part, which diceo does not open -- so a slide whose content is a chart
-            # indexes as an empty slide. Counted rather than extracted: extracting moves
-            # chunk text, and rule 4 owns that decision.
             report.notes.append(
-                f"charts={stats.charts} smartart={stats.smartart} (not indexed: their "
-                f"numbers live in chart/diagram parts diceo does not open)"
+                f"charts={stats.charts} smartart={stats.smartart} "
+                f"smartart_texts={stats.smartart_texts} (chart values and SmartArt visual "
+                f"relationships/unsupported text order are not indexed)"
             )
         # Content that is in the package and deliberately not in the index. Both were
         # found on real Microsoft samples where all five extractors reported no loss.
