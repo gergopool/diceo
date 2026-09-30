@@ -707,7 +707,7 @@ def iter_text_blocks(handle: IO[bytes], report: Diagnostics) -> Iterator[Block]:
 #: nothing pops until a matching end tag arrives -- so a page that never *closes*
 #: anything holds one frame per tag whatever its tags are, and the tags do not have to
 #: be ones this reader knows. `<table>` is the expensive one, because it also saves a
-#: nine-field frame holding three freshly allocated containers: measured through
+#: table frame holding three freshly allocated containers: measured through
 #: `iter_html_blocks` in a clean process, 6.7 MB of `<table>` grew the process by
 #: **498 MB** and 2.9 MB of `<b>` by 126 MB, both with `truncated` empty. A 100 MB
 #: crawled page of that shape is several GB. `Limits` cannot see it -- it is checked
