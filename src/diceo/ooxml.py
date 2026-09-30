@@ -69,7 +69,7 @@ import posixpath
 import re
 import zipfile
 from collections.abc import Iterator
-from contextlib import suppress
+from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
@@ -893,7 +893,7 @@ def iter_docx_blocks(
     from a bug when the missing sentence was in a header.
     """
     report = diagnostics if diagnostics is not None else OoxmlDiagnostics()
-    with zipfile.ZipFile(path) as archive:
+    with zipfile.ZipFile(path) as archive, ExitStack() as resources:
         count_media(archive, report)
         count_comments(archive, report)
         count_headers_footers(archive, report)
@@ -971,9 +971,23 @@ def iter_docx_blocks(
         #: to the end of the table: a blank form's body used to vanish, leaving a
         #: bare header that reads as a table with nothing under it.
         empty_rows = 0
-        #: Footnotes and alt text met inside a table, emitted after it: yielded
-        #: mid-row they ended the table run and the rest lost its header.
-        deferred: list[Block] = []
+        #: Footnotes and alt text keep their order after the outer table. A document
+        #: can be one table, so retaining its annotations as Blocks was unbounded.
+        deferred = None
+
+        def defer(block: Block) -> None:
+            nonlocal deferred
+            import pickle
+
+            if deferred is None:
+                from tempfile import SpooledTemporaryFile
+
+                deferred = resources.enter_context(
+                    SpooledTemporaryFile(max_size=1024**2, mode="w+b")
+                )
+            # These are our own records in a private file, never supplied pickles.
+            pickle.dump(block, deferred, protocol=5)
+
         #: The body and open tables, so emptied children can be unlinked -- cleared
         #: but attached, 200k paragraphs held 16 MB.
         body = None
@@ -1205,7 +1219,7 @@ def iter_docx_blocks(
                             alt = _alt_text(element, report)
                             if alt:
                                 if in_table:
-                                    deferred.append(Block("caption", alt))
+                                    defer(Block("caption", alt))
                                 else:
                                     yield Block("caption", alt)
                     elif tag == w_txbxcontent:
@@ -1261,7 +1275,7 @@ def iter_docx_blocks(
                             else:
                                 report.endnotes += 1
                             if in_table:
-                                deferred.append(Block(kind, note, 0))
+                                defer(Block(kind, note, 0))
                             else:
                                 yield Block(kind, note, 0)
                         element.clear()
@@ -1359,8 +1373,15 @@ def iter_docx_blocks(
                             cell_span = None
                             prev_row = []
                             empty_rows = 0
-                            yield from deferred
-                            deferred.clear()
+                            if deferred is not None:
+                                import pickle
+
+                                end = deferred.tell()
+                                deferred.seek(0)
+                                while deferred.tell() < end:
+                                    yield pickle.load(deferred)
+                                deferred.seek(0)
+                                deferred.truncate()
                         element.clear()
                         open_elements = 0
                         if not in_table and body is not None and len(body) > 64:
