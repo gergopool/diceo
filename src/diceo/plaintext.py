@@ -1796,13 +1796,13 @@ def _headers_size(part: object) -> int:
 
 
 def _part_size(part: object, depth: int = 0) -> int:
-    """Bytes of a part's payload, measured **without decoding it**.
+    """Estimated bytes of a part's payload, without decoding it.
 
     ``get_payload(decode=True)`` returns ``None`` rather than raising for a
     ``message/rfc822`` part, so ``len(... or b"")`` reported every forwarded mail as
     0 bytes -- a number a caller cannot act on and cannot tell from an empty file.
 
-    This number exists only to print ``(application/pdf, 4831202 bytes)`` in a
+    This number exists only to print an estimated payload size in a
     diagnostic about a part diceo deliberately **does not** extract, and it was
     base64-decoding that part in full to get it -- and, for multipart, re-serialising
     every child with ``as_bytes()``. Measured on a 160 MB mail carrying a 120 MB
@@ -1811,10 +1811,9 @@ def _part_size(part: object, depth: int = 0) -> int:
     Computing it from the *encoded* payload instead costs nothing measurable: 984 MB,
     unchanged from the parse.
 
-    Base64 carries three bytes per four characters and the line breaks are not
-    payload, which is exact. Quoted-printable is over-counted, and that is the right
-    trade for a figure whose only job is to tell a caller whether the part is worth
-    fetching.
+    Base64 carries at most three bytes per four characters, excluding line breaks;
+    padding can over-count by two bytes. Quoted-printable is also over-counted.
+    Diagnostics label the estimate instead of claiming an exact decoded count.
 
     None of this makes mail *streamed*. ``message_from_binary_file`` materialises the
     whole message -- the 984 MB above is 6.1x the file, and it is the stdlib parser,
@@ -1994,7 +1993,8 @@ def _attachment_line(part: object) -> str:
     """The one thing a caller needs to fetch a part diceo deliberately left out."""
     return (
         f"attachment={part.get_filename() or '(unnamed)'} "  # type: ignore[attr-defined]
-        f"({part.get_content_type()}, {_part_size(part)} bytes) -- "  # type: ignore[attr-defined]
+        f"({part.get_content_type()}, {_part_size(part)} bytes "  # type: ignore[attr-defined]
+        f"estimated from encoded payload) -- "
         f"not extracted; diceo's unit of work is one document"
     )
 
@@ -2049,7 +2049,8 @@ def _iter_leaf(
         yield from blocks
         return
     report.truncate(
-        f"unreferenced_part=(inline) ({kind}, {_part_size(part)} bytes) -- not "
+        f"unreferenced_part=(inline) ({kind}, {_part_size(part)} bytes "
+        f"estimated from encoded payload) -- not "
         f"extracted; it is neither the body nor an attachment"
     )
 
@@ -2076,7 +2077,8 @@ def _iter_forwarded(
     size = _part_size(part)
     if inner is None:
         report.truncate(
-            f"forwarded_message_unreadable ({size} bytes) -- a message/rfc822 part "
+            f"forwarded_message_unreadable ({size} bytes estimated from encoded payload) -- "
+            f"a message/rfc822 part "
             f"with no message in it"
         )
         return
@@ -2084,10 +2086,13 @@ def _iter_forwarded(
     if depth >= _RFC822_MAX_DEPTH:
         report.truncate(
             f"rfc822_depth_exceeded={depth + 1} (forwarded message '{subject}', "
-            f"{size:,} bytes, not read)"
+            f"{size:,} bytes estimated from encoded payload, not read)"
         )
         return
-    report.notes.append(f"forwarded_message={subject} ({size:,} bytes, read inline)")
+    report.notes.append(
+        f"forwarded_message={subject} ({size:,} bytes estimated from encoded payload, "
+        f"read inline)"
+    )
     yield from _iter_message(inner, report, used, depth + 1)
 
 
@@ -2195,7 +2200,7 @@ def iter_email_blocks(handle: IO[bytes], report: Diagnostics) -> Iterator[Block]
     and extracting it here would make one call do unbounded work. But a mail whose
     only content is its attachment must not look like an empty success -- that is
     the exact failure rule 3 exists for. So every attachment lands in
-    ``diagnostics.truncated`` with its name, type and size, and
+    ``diagnostics.truncated`` with its name, type and estimated payload size, and
     ``diagnostics.lost_data`` is True. The caller can then feed the bytes back in::
 
         import email, diceo

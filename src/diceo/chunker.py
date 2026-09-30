@@ -96,7 +96,6 @@ class _Packer:
         self.extra = extra
         self.target = limits.target_chars
         self.table_target = limits.resolved_table_chars()
-        self.diagnostics = diagnostics
         self.pending: list[Block] = []
         #: ``(level, text)`` of the open headings. By level, not position: a document
         #: that starts at H2 made its first H2 the title of every sibling after it.
