@@ -16,7 +16,7 @@ texts are unavailable are omitted from this refresh; their historical tables bel
 
 | Tool | Mean `gold@5`, 600/1800/4000 | PDF docs/CPU-s |
 |---|---:|---:|
-| Diceo 0.1.1 | 0.767 | 44.59 |
+| Diceo 0.1.1 | 0.767 | 43.50 |
 | Xberg | 0.745 | 13.09 |
 | LiteParse | 0.723 | 29.49 |
 | Unstructured | 0.719 | 0.601 |
@@ -28,11 +28,18 @@ retrieval scores are unchanged at all three aims. PDF shifts are +0.26, −0.39 
 percentage points; a strict universal PDF retrieval gain is not established. A separate
 36-real-document / 556-query check retains all hit, coverage and association results.
 
-**Cost checks.** Paired isolated measurements first identified CSV and legacy-sheet
-regressions, which were optimized before acceptance. Final focused public XLSX CPU is
-3.76% lower (90% paired interval: 3.14–3.89% lower); XLSB is 16.88% lower. CSV is effectively
-unchanged (−0.38% point estimate, interval includes zero). Large ODS peak current-process
-memory is 149.1 → 119.2 MiB. Measurements describe these corpora, not every document.
+**Cost checks.** The final integrated source is compared with the frozen pre-update tree
+and previous package commit over all 219 documents: six rounds, isolated processes,
+all arm-order permutations and quiet-load rejection. Aggregate CPU is **0.55% lower**
+(90% paired interval: 0.26–0.84% lower). Public XLSX is 2.73% lower; held-out XLSX 6.33%
+lower; XLSB 17.11% lower. CSV, email and ODS remain within measurement noise. Large ODS
+peak current-process memory is **146.75 → 133.01 MiB**; the earlier affected-format run
+measured 149.1 → 119.2 MiB. These are distinct measurements, not a universal memory ratio.
+
+Some added work costs more: public DOCX is 2.37% higher and PPTX 1.69% higher. The huge
+Ashford table is 6 ms slower while emitting more retrieval context; NASA's recovered
+SmartArt adds about 1.3 ms. Held-out PDF CPU is 0.50% higher, while public PDF is within
+noise. The aggregate improves, but no every-document zero-slowdown claim is made.
 
 **HTML comparison.** On twelve real public HTML documents, final Diceo chunking consumes
 1.1747 CPU seconds / 26.0 MiB peak current-process memory, compared with 4.724 CPU seconds
@@ -40,11 +47,12 @@ for Trafilatura default TXT plus splitting: 4.02× faster on this sample. Twenty
 selected substantive anchors and 114 selected authored math alternatives are retained.
 Trafilatura remains a benchmark tool, not a runtime dependency.
 
-**Provenance.** Research experiment 057; `scripts/bench057_improvements.py`, the paired
+**Provenance.** Research experiments 057–058; `scripts/bench057_improvements.py`, the paired
 retrieval harness and pinned checkpoint/cache namespace in `bench/embed.py`, public source
 hash manifest `bench/public/audit-056.jsonl`, and `scripts/plot057.py`. Original and candidate
 source snapshots, all accepted/rejected timing cells, raw rankings and chart inputs remain
-in the research record. GPU use is confined to that retrieval evaluation.
+in the research record. The final source preserves held-out chunk text, so the consistent
+quality scores are reused without another model run. GPU use is confined to evaluation.
 
 **How to read this page.** Nothing below is an average across formats, because averaging across
 formats hides exactly the cases where a tool falls over. Losses are included. A benchmark table with
